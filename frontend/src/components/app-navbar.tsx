@@ -1,4 +1,4 @@
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/components/ui/link";
@@ -125,17 +125,16 @@ export default function AppNavbar({ navItems, hasStreaming = false, ...props }: 
             if (item.pill) {
               return (
                 <div key={item.path} className="flex items-center gap-x-0">
-                  <NavbarItem isCurrent={isCurrent(item)}>
-                    <NavLink
-                      to={to}
-                      end={item.path === "/"}
-                      className={({ isActive }) =>
-                        `inline-flex items-center gap-x-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                          isActive
-                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                            : "bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950/20 dark:text-blue-400 dark:hover:bg-blue-900/30"
-                        } ${hasStreaming ? "ring-1 ring-red-400/50" : ""}`
-                      }
+                  <NavbarItem
+                    isCurrent={isCurrent(item)}
+                    onPress={() => navTo(item.path!, item.target)}
+                  >
+                    <span
+                      className={`inline-flex items-center gap-x-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                        isCurrent(item)
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                          : "bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950/20 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                      } ${hasStreaming ? "ring-1 ring-red-400/50" : ""}`}
                     >
                       {item.icon === "robot" && (
                         <svg
@@ -163,7 +162,7 @@ export default function AppNavbar({ navItems, hasStreaming = false, ...props }: 
                           <span className="relative inline-flex size-2 rounded-full bg-red-500" />
                         </span>
                       )}
-                    </NavLink>
+                    </span>
                   </NavbarItem>
                   {item.divider_after && (
                     <div className="mx-1.5 h-[18px] w-px bg-border" />
@@ -174,16 +173,12 @@ export default function AppNavbar({ navItems, hasStreaming = false, ...props }: 
 
             // ── Plain nav link ──
             return (
-              <NavbarItem key={item.path} isCurrent={isCurrent(item)}>
-                {openBlank ? (
-                  <a href={item.path} target="_blank" rel="noopener noreferrer">
-                    {item.label}
-                  </a>
-                ) : (
-                  <NavLink to={to} end={item.path === "/"}>
-                    {item.label}
-                  </NavLink>
-                )}
+              <NavbarItem
+                key={item.path}
+                isCurrent={isCurrent(item)}
+                onPress={() => navTo(item.path!, item.target)}
+              >
+                {item.label}
               </NavbarItem>
             );
           })}
