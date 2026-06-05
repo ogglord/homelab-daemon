@@ -1,0 +1,32 @@
+run:
+  timeout: 5m
+  go: "1.25"
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosimple
+    - gosec
+    - gocritic
+    - revive
+
+linters-settings:
+  gosec:
+    excludes:
+      - G104
+  revive:
+    rules:
+      - name: var-naming
+      - name: exported
+        disabled: true
+
+issues:
+  exclude-dirs:
+    - vendor
+  max-issues-per-linter: 0
+  max-same-issues: 0
