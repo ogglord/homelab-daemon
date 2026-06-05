@@ -54,10 +54,9 @@
           };
         };
 
-        # The web dashboard frontend (React/Vite, served by Caddy).
-        # Copy generated TS types from api-types/ before building.
+        # The web frontend (React/Vite, served by Caddy).
         frontend = pkgs.buildNpmPackage {
-          name = "homelab-dash-frontend";
+          name = "homelab-frontend";
           src = ./frontend;
           npmDepsHash = "sha256-KIGUZ3+9Kq1zDS8bjZMI7C7+sk5cV9nZunZuwGq+22E=";
           dontNpmBuild = true;
