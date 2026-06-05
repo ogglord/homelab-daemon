@@ -22,7 +22,8 @@ export function useSparkline(
     if (value !== undefined && Number.isFinite(value)) {
       bufferRef.current = [...bufferRef.current, value].slice(-maxPoints);
     }
-    return bufferRef.current;
+    // Return a new array so React sees a reference change
+    return [...bufferRef.current];
   };
 
   const { data } = useOverview(wrappedSelector);
