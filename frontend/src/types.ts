@@ -17,12 +17,30 @@ export type {
   DiskIOStats, ServiceInfo, VMInfo,
 };
 export type Stats = StatsSnapshot;
-export type { StatsSnapshot, Pool, Disk, Subvolume, BackupStatus,
+export type { StatsSnapshot, Pool, Disk, Subvolume,
   Service, ServiceStatus, SuccessResponse, ErrorResponse,
   MountRequest, UnmountRequest, CommandResult,
   UpdateInfo, MetadataEntry, UpdatesStatus, VersionResponse,
   SecretEntry, PatchServiceRequest, PatchServiceResponse,
 } from "./types.gen";
+
+// BackupStatus in Go embeds a Backup struct, producing a nested property
+// in the generated TS. Keep a flat version here since the frontend code
+// expects `backup.unit` etc. directly.
+export interface BackupStatus {
+  unit: string;
+  enabled: boolean;
+  schedule: string;
+  depends_on: string[];
+  requires_mount: string[];
+  healthcheck_uuid: string;
+  pause_service: string;
+  active_state: string;
+  result: string;
+  last_run_start: string;
+  last_run_end: string;
+  next_run: string;
+}
 
 // ── Frontend-only types ────────────────────────────────────────────────
 
