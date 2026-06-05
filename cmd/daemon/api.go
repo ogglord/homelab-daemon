@@ -188,7 +188,7 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 	// Generates the log viewer tab list from the daemon's own managed
 	// services + backups so every configured service automatically gets
 	// a filter button — no separate static JSON file needed.
-	mux.HandleFunc("GET /api/v1/log-viewer-config", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /api/log-viewer-config", func(w http.ResponseWriter, _ *http.Request) {
 		levelField := api.LogViewerField{
 			Name: "level", Label: "Level", Type: "enum",
 			Values: []string{"debug", "info", "warn", "error"},
