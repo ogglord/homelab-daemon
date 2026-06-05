@@ -6,8 +6,14 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = import nixpkgs {
           inherit system;
@@ -83,7 +89,10 @@
           inherit daemon cli frontend;
           homelab-daemon = pkgs.symlinkJoin {
             name = "homelab-daemon";
-            paths = [ daemon cli ];
+            paths = [
+              daemon
+              cli
+            ];
             meta = {
               description = "Homelab daemon + CLI";
               license = pkgs.lib.licenses.mit;
@@ -96,7 +105,14 @@
         devShells.default = pkgs.mkShell {
           name = "homelab-daemon-dev";
           buildInputs = with pkgs; [
-            go gopls golangci-lint pkg-config libvirt nodejs tygo
+            go
+            gopls
+            golangci-lint
+            pkg-config
+            libvirt
+            nodejs
+            tygo
+            nixfmt-rfc-style
           ];
           shellHook = ''
             echo "homelab-daemon dev shell (go $(go version | cut -d' ' -f3))"
@@ -108,13 +124,17 @@
       }
     )
     // {
-      nixosModules.default = { pkgs, lib, ... }: {
-        nixpkgs.overlays = [ (final: prev: {
-          homelab-daemon = self.packages.${pkgs.system}.default;
-          homelab-daemon-cli = self.packages.${pkgs.system}.cli;
-          homelab-frontend = self.packages.${pkgs.system}.frontend;
-        }) ];
-        imports = [ ./module.nix ];
-      };
+      nixosModules.default =
+        { pkgs, lib, ... }:
+        {
+          nixpkgs.overlays = [
+            (final: prev: {
+              homelab-daemon = self.packages.${pkgs.system}.default;
+              homelab-daemon-cli = self.packages.${pkgs.system}.cli;
+              homelab-frontend = self.packages.${pkgs.system}.frontend;
+            })
+          ];
+          imports = [ ./module.nix ];
+        };
     };
 }
