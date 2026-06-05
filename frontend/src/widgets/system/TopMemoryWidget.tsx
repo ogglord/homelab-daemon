@@ -1,50 +1,34 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Meter, MeterTrack } from "@/components/ui/meter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOverview } from "@/hooks/use-overview";
-import type { Stats, ProcessStat } from "@/types";
+import type { ProcessStat } from "@/types";
+import { MemoryStick } from "lucide-react";
 
-function ProcessList({ title, processes, valueKey, valueSuffix, color }: {
-  title: string;
+function ProcessRows({ processes, valueKey, valueSuffix, color }: {
   processes: ProcessStat[];
   valueKey: "CPU" | "Memory";
   valueSuffix: string;
   color: string;
 }) {
-  if (!processes?.length) {
-    return (
-      <Card className="h-full">
-        <CardHeader title={title} />
-        <CardContent>
-          <p className="text-sm text-muted-fg">No process data available</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader title={title} />
-      <CardContent className="flex-1 space-y-4">
-        {processes.slice(0, 5).map((p) => {
-          const val = p[valueKey];
-          // Cap at 100 for the progress bar visual
-          const pct = Math.min(val, 100);
-          return (
-            <div key={p.PID}>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-fg truncate pr-2 font-medium">{p.Name}</span>
-                <span className="font-mono text-muted-fg">{val.toFixed(1)}{valueSuffix}</span>
-              </div>
-              <Meter value={pct} color={color}>
-                <MeterTrack />
-              </Meter>
+    <div className="space-y-1.5">
+      {processes.slice(0, 5).map((p) => {
+        const val = p[valueKey];
+        const pct = Math.min(val, 100);
+        return (
+          <div key={p.PID}>
+            <div className="flex justify-between text-xs mb-0.5">
+              <span className="text-fg truncate pr-2">{p.Name}</span>
+              <span className="font-mono text-muted-fg shrink-0">{val.toFixed(1)}{valueSuffix}</span>
             </div>
-          );
-        })}
-      </CardContent>
-    </Card>
+            <Meter value={pct} color={color}>
+              <MeterTrack className="[--meter-height:--spacing(1)]" />
+            </Meter>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -53,5 +37,21 @@ export function TopMemoryWidget() {
 
   if (!stats) return <Skeleton isLoading><Card className="h-full"><CardContent>{"."}</CardContent></Card></Skeleton>;
 
-  return <ProcessList title="Top Memory Processes" processes={stats.TopMem} valueKey="Memory" valueSuffix="%" color="var(--color-success)" />;
+  return (
+    <Card className="h-full [--gutter:--spacing(3)]">
+      <CardContent>
+        {/* Header row */}
+        <div className="flex items-center gap-1.5 mb-2">
+          <MemoryStick className="h-3.5 w-3.5 text-success" />
+          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">Top Memory</span>
+        </div>
+
+        {stats.TopMem?.length ? (
+          <ProcessRows processes={stats.TopMem} valueKey="Memory" valueSuffix="%" color="var(--color-success)" />
+        ) : (
+          <p className="text-xs text-muted-fg">No process data</p>
+        )}
+      </CardContent>
+    </Card>
+  );
 }

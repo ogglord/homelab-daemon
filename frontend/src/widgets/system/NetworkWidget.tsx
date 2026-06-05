@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Sparkline } from "@/components/ui/sparkline";
 import { useOverview } from "@/hooks/use-overview";
-import type { Stats } from "@/types";
+import { useSparkline } from "@/hooks/use-sparkline";
+import { Network } from "lucide-react";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -14,21 +15,49 @@ function formatBytes(bytes: number): string {
 
 export function NetworkWidget() {
   const { data: stats } = useOverview((o) => o?.Stats);
+  const recvHistory = useSparkline((o) => o.Stats?.NetRecvRate, 30);
+  const sentHistory = useSparkline((o) => o.Stats?.NetSentRate, 30);
 
   if (!stats) return <Skeleton isLoading><Card className="h-full"><CardContent>{"."}</CardContent></Card></Skeleton>;
 
   return (
-    <Card className="h-full">
-      <CardHeader title="Network Throughput" />
+    <Card className="h-full [--gutter:--spacing(3)]">
       <CardContent>
-        <div className="grid grid-cols-2 gap-4">
+        {/* Header row */}
+        <div className="flex items-center gap-1.5 mb-2">
+          <Network className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">Network</span>
+        </div>
+
+        {/* Two columns: down / up */}
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-xs text-muted-fg mb-1">Download</p>
-            <p className="text-lg font-mono text-primary">{formatBytes(stats.NetRecvRate)}/s</p>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-muted-fg">↓ Down</span>
+              <span className="text-xs font-mono font-bold text-primary">{formatBytes(stats.NetRecvRate)}/s</span>
+            </div>
+            <Sparkline
+              data={recvHistory}
+              width={160}
+              height={24}
+              color="var(--color-primary)"
+              filled
+              className="w-full"
+            />
           </div>
           <div>
-            <p className="text-xs text-muted-fg mb-1">Upload</p>
-            <p className="text-lg font-mono text-accent">{formatBytes(stats.NetSentRate)}/s</p>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-muted-fg">↑ Up</span>
+              <span className="text-xs font-mono font-bold text-success">{formatBytes(stats.NetSentRate)}/s</span>
+            </div>
+            <Sparkline
+              data={sentHistory}
+              width={160}
+              height={24}
+              color="var(--color-success)"
+              filled
+              className="w-full"
+            />
           </div>
         </div>
       </CardContent>

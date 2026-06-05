@@ -1,21 +1,47 @@
-import { useState, useEffect } from "react";
-import { Heading } from "@/components/ui/heading";
+import { useState, useEffect, useRef } from "react";
 import { Reorder } from "motion/react";
 import { WIDGETS } from "@/widgets/registry";
 import { Button } from "@/components/ui/button";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { useOverview } from "@/hooks/use-overview";
+import { LayoutGrid, GripVertical, ChevronLeft, ChevronRight } from "lucide-react";
 
 export interface WidgetLayout {
   id: string;
   span: 1 | 2 | 4;
 }
 
+function PollChip() {
+  const lastFetchRef = useRef(Date.now());
+  const [ago, setAgo] = useState(0);
+
+  // Re-render the "Ns ago" text every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setAgo(Math.round((Date.now() - lastFetchRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // On every overview tick, reset the timestamp
+  const { data } = useOverview();
+  useEffect(() => {
+    if (data) lastFetchRef.current = Date.now();
+  }, [data]);
+
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-fg">
+      <span className="inline-block size-1.5 rounded-full bg-success animate-pulse" />
+      <span>{ago}s ago</span>
+    </div>
+  );
+}
+
 export default function OverviewPage() {
   const [layout, setLayout] = useState<WidgetLayout[]>(() => {
     const saved = localStorage.getItem("dash-overview-layout");
-    
+
     let currentLayout: WidgetLayout[] = [];
-    
+
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -54,7 +80,6 @@ export default function OverviewPage() {
                 currentLayout.push({ id: 'top-memory', span: item.span === 4 ? 2 : 1 });
               } else {
                 const w = WIDGETS.find(w => w.id === item.id);
-                // Ensure it's a valid widget and not already in layout to avoid duplicates
                 if (w && !currentLayout.some(existing => existing.id === item.id)) {
                   currentLayout.push(item);
                 }
@@ -64,9 +89,8 @@ export default function OverviewPage() {
         }
       } catch (e) {}
     }
-    
+
     if (currentLayout.length === 0) {
-      // Default layout
       currentLayout = WIDGETS.map((w) => ({
         id: w.id,
         span: (w.defaultGridSpan === 2 ? 4 : 2) as 1 | 2 | 4
@@ -80,7 +104,7 @@ export default function OverviewPage() {
       }));
       currentLayout = [...currentLayout, ...newWidgets];
     }
-    
+
     return currentLayout;
   });
 
@@ -100,7 +124,7 @@ export default function OverviewPage() {
       if (idx < 0) return prev;
       const newIdx = idx + direction;
       if (newIdx < 0 || newIdx >= prev.length) return prev;
-      
+
       const newLayout = [...prev];
       const temp = newLayout[idx];
       newLayout[idx] = newLayout[newIdx];
@@ -110,57 +134,72 @@ export default function OverviewPage() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-3 pb-12">
+      {/* Compact header */}
       <div className="flex justify-between items-center">
-        <div>
-          <Heading level={1}>Overview</Heading>
-          <p className="text-sm text-muted-fg">System & Services</p>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-mono">Overview</span>
+          <PollChip />
         </div>
-        <Button intent="secondary" size="sm" onPress={() => setIsEditing(!isEditing)}>
-          {isEditing ? <Minimize2 className="w-4 h-4 mr-2" /> : <Maximize2 className="w-4 h-4 mr-2" />}
-          {isEditing ? "Finish Editing" : "Edit Layout"}
+        <Button
+          intent="plain"
+          size="sq-xs"
+          onPress={() => setIsEditing(!isEditing)}
+          aria-label={isEditing ? "Finish editing" : "Edit layout"}
+        >
+          <LayoutGrid className={`w-4 h-4 ${isEditing ? "text-primary" : ""}`} />
         </Button>
       </div>
 
-      <Reorder.Group 
-        axis="y" 
-        values={layout} 
-        onReorder={setLayout} 
-        className="grid grid-cols-1 md:grid-cols-4 gap-6"
+      <Reorder.Group
+        axis="y"
+        values={layout}
+        onReorder={setLayout}
+        className="grid grid-cols-1 md:grid-cols-4 gap-2"
       >
         {layout.map((item) => {
           const widget = WIDGETS.find((w) => w.id === item.id);
           if (!widget) return null;
           const Component = widget.component;
-          
+
           const colSpanClass = item.span === 4 ? 'md:col-span-4' : item.span === 2 ? 'md:col-span-2' : 'md:col-span-1';
-          
+
           return (
-            <Reorder.Item 
-              key={item.id} 
-              value={item} 
+            <Reorder.Item
+              key={item.id}
+              value={item}
               dragListener={isEditing}
-              className={`${colSpanClass} ${isEditing ? 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-primary rounded-xl relative z-10' : ''}`}
+              className={`${colSpanClass} ${isEditing ? 'cursor-grab active:cursor-grabbing ring-1 ring-border rounded-lg relative' : ''}`}
             >
+              {/* Edit toolbar — compact, visible above the content */}
               {isEditing && (
-                <div className="absolute inset-0 z-50 bg-black/5 dark:bg-white/5 backdrop-blur-[1px] flex flex-col items-center justify-center rounded-xl transition-all">
-                  <div className="bg-bg text-fg px-3 py-1.5 rounded-md shadow-sm border text-sm font-medium mb-3">
-                    Drag or use buttons
+                <div className="flex items-center justify-between px-2 py-1 bg-muted/50 rounded-t-lg border-b border-border">
+                  <div className="flex items-center gap-1">
+                    <GripVertical className="h-3 w-3 text-muted-fg" />
+                    <span className="text-[10px] text-muted-fg font-mono">{widget.name}</span>
                   </div>
-                  <div className="flex flex-col gap-2" onPointerDown={e => e.stopPropagation()}>
-                    <div className="flex gap-2 justify-center bg-bg/90 p-1.5 rounded-lg border shadow-sm">
-                      <Button size="xs" intent={item.span === 1 ? "primary" : "secondary"} onPress={() => updateSpan(item.id, 1)}>1u</Button>
-                      <Button size="xs" intent={item.span === 2 ? "primary" : "secondary"} onPress={() => updateSpan(item.id, 2)}>2u</Button>
-                      <Button size="xs" intent={item.span === 4 ? "primary" : "secondary"} onPress={() => updateSpan(item.id, 4)}>4u</Button>
-                    </div>
-                    <div className="flex gap-2 justify-center bg-bg/90 p-1.5 rounded-lg border shadow-sm">
-                      <Button size="xs" intent="secondary" onPress={() => moveWidget(item.id, -1)}>&larr; Move Left</Button>
-                      <Button size="xs" intent="secondary" onPress={() => moveWidget(item.id, 1)}>Move Right &rarr;</Button>
+                  <div className="flex items-center gap-0.5">
+                    <Button size="sq-xs" intent="plain" onPress={() => moveWidget(item.id, -1)}>
+                      <ChevronLeft className="h-3 w-3" />
+                    </Button>
+                    <Button size="sq-xs" intent="plain" onPress={() => moveWidget(item.id, 1)}>
+                      <ChevronRight className="h-3 w-3" />
+                    </Button>
+                    <div className="flex gap-px ml-1">
+                      {([1, 2, 4] as const).map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => updateSpan(item.id, s)}
+                          className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${item.span === s ? 'bg-primary text-primary-fg' : 'bg-secondary text-secondary-fg hover:bg-accent'}`}
+                        >
+                          {s}u
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
               )}
-              <div className={isEditing ? 'pointer-events-none opacity-50 blur-sm transition-all h-full' : 'h-full'}>
+              <div className="h-full">
                 <Component />
               </div>
             </Reorder.Item>

@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Meter, MeterTrack } from "@/components/ui/meter";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RingGauge } from "@/components/ui/ring-gauge";
 import { useOverview } from "@/hooks/use-overview";
-import type { Stats } from "@/types";
+import { Monitor } from "lucide-react";
 
 export function GpuEnginesWidget() {
   const { data: stats } = useOverview((o) => o?.Stats);
@@ -12,26 +11,38 @@ export function GpuEnginesWidget() {
   if (!stats.Gpu?.Available) return null;
 
   return (
-    <Card className="h-full">
-      <CardHeader title="iGPU Engines" />
-      <CardContent className="space-y-4">
-        <div>
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-fg">Render / 3D</span>
-            <span className="font-mono text-muted-fg">{stats.Gpu.RenderBusy.toFixed(1)}%</span>
-          </div>
-          <Meter value={stats.Gpu.RenderBusy} valueLabel={`${stats.Gpu.RenderBusy.toFixed(1)}%`} color="var(--color-primary)">
-            <MeterTrack />
-          </Meter>
+    <Card className="h-full [--gutter:--spacing(3)]">
+      <CardContent>
+        {/* Header row */}
+        <div className="flex items-center gap-1.5 mb-3">
+          <Monitor className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">iGPU Engines</span>
         </div>
-        <div>
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-fg">Video</span>
-            <span className="font-mono text-muted-fg">{stats.Gpu.VideoBusy.toFixed(1)}%</span>
+
+        {/* Ring gauges */}
+        <div className="flex items-center justify-around">
+          <div className="flex flex-col items-center gap-1">
+            <RingGauge
+              value={stats.Gpu.RenderBusy}
+              max={100}
+              label={`${stats.Gpu.RenderBusy.toFixed(0)}%`}
+              color="var(--color-primary)"
+              size={64}
+              strokeWidth={5}
+            />
+            <span className="text-[10px] text-muted-fg uppercase tracking-wider">Render</span>
           </div>
-          <Meter value={stats.Gpu.VideoBusy} valueLabel={`${stats.Gpu.VideoBusy.toFixed(1)}%`} color="var(--color-accent)">
-            <MeterTrack />
-          </Meter>
+          <div className="flex flex-col items-center gap-1">
+            <RingGauge
+              value={stats.Gpu.VideoBusy}
+              max={100}
+              label={`${stats.Gpu.VideoBusy.toFixed(0)}%`}
+              color="var(--color-accent-fg)"
+              size={64}
+              strokeWidth={5}
+            />
+            <span className="text-[10px] text-muted-fg uppercase tracking-wider">Video</span>
+          </div>
         </div>
       </CardContent>
     </Card>

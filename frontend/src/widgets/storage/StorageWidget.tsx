@@ -1,24 +1,22 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Meter, MeterTrack } from "@/components/ui/meter";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StorageStatus } from "@/types";
+import { Database } from "lucide-react";
 
 export function StorageWidget() {
   const [status, setStatus] = useState<StorageStatus | null>(null);
 
   useEffect(() => {
-    fetch("/api/storage")
-      .then((r) => r.json())
-      .then(setStatus)
-      .catch(() => {});
-      
-    const interval = setInterval(() => {
+    const fetchStorage = () => {
       fetch("/api/storage")
         .then((r) => r.json())
         .then(setStatus)
         .catch(() => {});
-    }, 5000);
+    };
+    fetchStorage();
+    const interval = setInterval(fetchStorage, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -31,54 +29,46 @@ export function StorageWidget() {
   }
 
   const pools = status.pools || [];
-  
+
+  const fmtBytes = (bytes: number) => {
+    if (bytes === 0) return "0 B";
+    const sizes = ["B", "KB", "MB", "GB", "TB", "PB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+  };
+
   return (
-    <Card className="h-full">
-      <CardHeader title="Storage Pools" />
-      <CardContent className="space-y-4">
+    <Card className="h-full [--gutter:--spacing(3)]">
+      <CardContent>
+        {/* Header row */}
+        <div className="flex items-center gap-1.5 mb-2">
+          <Database className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">Storage</span>
+        </div>
+
         {pools.length === 0 ? (
-          <p className="text-sm text-muted-fg">No storage pools found.</p>
+          <p className="text-xs text-muted-fg">No pools found.</p>
         ) : (
-          pools.map((pool) => {
-            const usedPct = pool.usage?.used_percent ?? 0;
-            const color = usedPct > 90 ? "var(--color-danger)" : usedPct > 75 ? "var(--color-warning)" : "var(--color-success)";
-            
-            const fmtBytes = (bytes: number) => {
-              if (bytes === 0) return "0 B";
-              const sizes = ["B", "KB", "MB", "GB", "TB", "PB"];
-              const i = Math.floor(Math.log(bytes) / Math.log(1024));
-              return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
-            };
-            
-            const total = pool.usage ? fmtBytes(pool.usage.total_bytes) : "Unknown";
-            const used = pool.usage ? fmtBytes(pool.usage.used_bytes) : "Unknown";
+          <div className="space-y-2">
+            {pools.map((pool) => {
+              const usedPct = pool.usage?.used_percent ?? 0;
+              const color = usedPct > 90 ? "var(--color-danger)" : usedPct > 75 ? "var(--color-warning)" : "var(--color-success)";
+              const total = pool.usage ? fmtBytes(pool.usage.total_bytes) : "?";
+              const used = pool.usage ? fmtBytes(pool.usage.used_bytes) : "?";
 
-            // Build a metadata line: "N disks · replicas=N · state"
-            const metaParts: string[] = [];
-            if (pool.disks?.length) {
-              metaParts.push(`${pool.disks.length} disk${pool.disks.length > 1 ? 's' : ''}`);
-            }
-            if (pool.data_replicas !== undefined) {
-              metaParts.push(`replicas=${pool.data_replicas}`);
-            }
-            metaParts.push(pool.state);
-            const metaLine = metaParts.join(' · ');
-
-            return (
-              <div key={pool.uuid}>
-                <div className="flex justify-between text-sm mb-1">
-                  <div className="min-w-0">
-                    <span className="text-fg truncate block" title={pool.mountdir}>{pool.mountdir}</span>
-                    <span className="text-xs text-muted-fg">{metaLine}</span>
+              return (
+                <div key={pool.uuid}>
+                  <div className="flex justify-between text-xs mb-0.5">
+                    <span className="text-fg font-mono truncate" title={pool.mountdir}>{pool.mountdir}</span>
+                    <span className="font-mono text-muted-fg shrink-0 ml-2">{used}/{total}</span>
                   </div>
-                  <span className="font-mono text-muted-fg whitespace-nowrap ml-2">{used} / {total}</span>
+                  <Meter value={usedPct} valueLabel={`${usedPct.toFixed(1)}%`} color={color}>
+                    <MeterTrack className="[--meter-height:--spacing(1)]" />
+                  </Meter>
                 </div>
-                <Meter value={usedPct} valueLabel={`${usedPct.toFixed(1)}%`} color={color}>
-                  <MeterTrack />
-                </Meter>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </CardContent>
     </Card>
