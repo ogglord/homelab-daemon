@@ -99,19 +99,12 @@
     )
     // {
       nixosModules.default = { pkgs, lib, ... }: {
-        options.services.homelab-daemon = {
-          enable = lib.mkEnableOption "homelab service orchestrator";
-          dash = lib.mkOption {
-            type = lib.types.bool;
-            default = true;
-            description = "Enable the web dashboard frontend.";
-          };
-        };
-        config = lib.mkIf (lib.attrByPath [ "services" "homelab-daemon" "enable" ] false { }) {
-          environment.systemPackages = [
-            self.packages.${pkgs.system}.cli
-          ];
-        };
+        nixpkgs.overlays = [ (final: prev: {
+          homelab-daemon = self.packages.${pkgs.system}.default;
+          homelab-daemon-cli = self.packages.${pkgs.system}.cli;
+          homelab-frontend = self.packages.${pkgs.system}.frontend;
+        }) ];
+        imports = [ ./module.nix ];
       };
     };
 }
