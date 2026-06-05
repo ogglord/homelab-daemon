@@ -73,6 +73,16 @@ func handleMergeConfig() {
 				mergeLog.Info("synced depends_on for existing service", "unit", s.Unit, "depends_on", s.DependsOn)
 				modified = true
 			}
+			if existing.IconURL != s.IconURL {
+				existing.IconURL = s.IconURL
+				mergeLog.Info("synced icon_url for existing service", "unit", s.Unit, "icon_url", s.IconURL)
+				modified = true
+			}
+			if existing.HomepageURL != s.HomepageURL {
+				existing.HomepageURL = s.HomepageURL
+				mergeLog.Info("synced homepage_url for existing service", "unit", s.Unit, "homepage_url", s.HomepageURL)
+				modified = true
+			}
 		} else {
 			existingCfg.Services = append(existingCfg.Services, s)
 			mergeLog.Info("merged new service into services.yaml", "unit", s.Unit)
