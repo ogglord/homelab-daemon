@@ -61,7 +61,7 @@
         frontend = pkgs.buildNpmPackage {
           name = "homelab-frontend";
           src = ./frontend;
-          npmDepsHash = "sha256-KIGUZ3+9Kq1zDS8bjZMI7C7+sk5cV9nZunZuwGq+22E=";
+          npmDepsHash = "sha256-GG7HFExwJ9M2rYZJE1Nk7yFF7qDMMBJNv9aAiLnklEI=";
           dontNpmBuild = true;
           npmFlags = [ "--loglevel=error" ];
           buildPhase = ''
