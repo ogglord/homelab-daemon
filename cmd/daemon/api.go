@@ -184,6 +184,47 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 	mux.HandleFunc("GET /api/pi/streaming", piStreamingHandler)
 	mux.HandleFunc("GET /api/v1/pi/streaming", piStreamingHandler)
 
+	// ── Log viewer config ─────────────────────────────────────────────
+	// Generates the log viewer tab list from the daemon's own managed
+	// services + backups so every configured service automatically gets
+	// a filter button — no separate static JSON file needed.
+	mux.HandleFunc("GET /api/v1/log-viewer-config", func(w http.ResponseWriter, _ *http.Request) {
+		levelField := api.LogViewerField{
+			Name: "level", Label: "Level", Type: "enum",
+			Values: []string{"debug", "info", "warn", "error"},
+		}
+
+		services := make([]api.LogViewerServiceConfig, 0, len(cfg.Services)+len(cfg.Backups))
+
+		for _, s := range cfg.Services {
+			name := strings.TrimSuffix(strings.TrimPrefix(s.Unit, "podman-"), ".service")
+			services = append(services, api.LogViewerServiceConfig{
+				ID:       name,
+				Label:    fmtName(name),
+				Selector: fmt.Sprintf(`{unit=%q}`, s.Unit),
+				Fields:   []api.LogViewerField{levelField, {Name: "module", Label: "Module", Type: "text"}},
+				Format:   "json",
+			})
+		}
+		for _, b := range cfg.Backups {
+			name := strings.TrimSuffix(b.Unit, ".service")
+			services = append(services, api.LogViewerServiceConfig{
+				ID:       name,
+				Label:    fmtName(name),
+				Selector: fmt.Sprintf(`{unit=%q}`, b.Unit),
+				Fields:   []api.LogViewerField{levelField, {Name: "module", Label: "Module", Type: "text"}},
+				Format:   "json",
+			})
+		}
+
+		writeJSON(w, api.LogViewerConfig{
+			DefaultMode:   "query",
+			DefaultWindow: "1h",
+			MaxLines:      500,
+			Services:      services,
+		})
+	})
+
 	statusHandler := func(w http.ResponseWriter, r *http.Request) {
 		// Batch-fetch ActiveState, SubState, Description from systemd
 		// so the dash doesn't need to probe systemctl directly.
@@ -1428,4 +1469,12 @@ func or(v, fallback string) string {
 		return fallback
 	}
 	return v
+}
+
+// fmtName converts a kebab/snake-case name to title case.
+// E.g. "immich-server" → "Immich Server", "b2_backup_appdata" → "B2 Backup Appdata".
+func fmtName(name string) string {
+	out := strings.ReplaceAll(name, "-", " ")
+	out = strings.ReplaceAll(out, "_", " ")
+	return strings.Title(out)
 }

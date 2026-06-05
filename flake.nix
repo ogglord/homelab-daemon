@@ -20,7 +20,7 @@
           config.allowUnfree = true;
         };
 
-        vendorHash = "sha256-YbPyurCsKsxSDgMe8jVWrKuOcyLmjuMa6Y8JJc0sKzs=";
+        vendorHash = "sha256-3z96n9RjknlUkYkk+MwDHR0+6lf/xiplPejoLFuM9vQ=";
 
         daemon = pkgs.buildGoModule {
           pname = "homelab-daemon";

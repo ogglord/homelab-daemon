@@ -92,6 +92,17 @@ function useLogQuery(
   const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
+  const loadingStartedAt = useRef<number>(0);
+
+  /** Ensure loading state stays visible for at least 300ms */
+  const doneLoading = useCallback(() => {
+    const elapsed = Date.now() - loadingStartedAt.current;
+    if (elapsed < 300) {
+      setTimeout(() => setIsLoading(false), 300 - elapsed);
+    } else {
+      setIsLoading(false);
+    }
+  }, []);
 
   const fetchLogs = useCallback(() => {
     controllerRef.current?.abort();
@@ -113,6 +124,7 @@ function useLogQuery(
     if (range.end)   params.set("end", range.end);
 
     setIsLoading(true);
+    loadingStartedAt.current = Date.now();
     setError(null);
 
     fetch(`/api/victorialogs/select/logsql/query?${params}`, { signal: controller.signal })
@@ -126,16 +138,16 @@ function useLogQuery(
           try { parsed.push(JSON.parse(t) as LogLine); } catch { /* skip */ }
         }
         setLines(parsed);
-        setIsLoading(false);
+        doneLoading();
       })
       .catch((err: Error) => {
         if (err.name === "AbortError") return;
         if (!controller.signal.aborted) {
           setError(err.message);
-          setIsLoading(false);
+          doneLoading();
         }
       });
-  }, [config.id, JSON.stringify(fieldFilters), textQuery, window, maxLines]);
+  }, [config.id, JSON.stringify(fieldFilters), textQuery, window, maxLines, doneLoading]);
 
   useEffect(() => {
     fetchLogs();
@@ -155,7 +167,7 @@ function useLogQuery(
 
 export default function LogsPage() {
   const { data: config, error: configError, loading: configLoading } =
-    useJsonConfig<LogViewerConfig>("/log-viewer-config.json");
+    useJsonConfig<LogViewerConfig>("/api/v1/log-viewer-config");
 
   if (configLoading) {
     return (
@@ -336,7 +348,14 @@ function LogsPageInner({ config }: { config: LogViewerConfig }) {
       </div>
 
       {/* Log output */}
-      <div className="bg-slate-950 rounded-lg border border-slate-800 overflow-auto font-mono text-xs leading-5 h-[60vh]">
+      <div className="bg-slate-950 rounded-lg border border-slate-800 overflow-auto font-mono text-xs leading-5 h-[60vh] relative">
+        {/* Overlay: appears on filter changes while new results load */}
+        {isLoading && lines.length > 0 && (
+          <div className="absolute inset-0 z-10 bg-slate-950/50 flex items-start justify-center pt-12 backdrop-blur-[1px] transition-opacity">
+            <RefreshCw className="w-5 h-5 animate-spin text-muted-fg" />
+          </div>
+        )}
+
         {lines.length === 0 && !isLoading && !error && (
           <div className="flex items-center justify-center h-full text-muted-fg italic">
             No results. Try adjusting your filters or time range.
