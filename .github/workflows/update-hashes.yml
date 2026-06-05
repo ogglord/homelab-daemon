@@ -1,0 +1,36 @@
+name: Update Nix Hashes
+
+on:
+  push:
+    paths:
+      - 'go.sum'
+      - 'frontend/package-lock.json'
+      - 'flake.nix'
+  pull_request:
+    paths:
+      - 'go.sum'
+      - 'frontend/package-lock.json'
+      - 'flake.nix'
+  workflow_dispatch:
+
+jobs:
+  update-hashes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Update Hashes
+        run: ./scripts/update-hashes.sh all
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update nix hashes [skip ci]"
+          file_pattern: "flake.nix"
