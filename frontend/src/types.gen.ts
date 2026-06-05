@@ -20,10 +20,17 @@ export interface Backup {
 }
 /**
  * BackupStatus is the runtime status emitted by GET /api/v1/backups.
- * Embeds Backup so all static config fields are present too.
+ * Fields are flat (not embedded from Backup) so the generated TypeScript
+ * interface has direct property access: backups[0].unit, not backups[0].Backup.unit.
  */
 export interface BackupStatus {
-  Backup: Backup;
+  unit: string;
+  enabled: boolean;
+  schedule: string; // cron expression
+  depends_on: string[];
+  requires_mount: string[];
+  healthcheck_uuid: string;
+  pause_service: string;
   active_state: string;
   result: string;
   last_run_start: string;

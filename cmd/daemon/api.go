@@ -390,7 +390,7 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 	mux.HandleFunc("GET /api/backups", func(w http.ResponseWriter, r *http.Request) {
 		out := make([]api.BackupStatus, 0, len(cfg.Backups))
 		for _, b := range cfg.Backups {
-			bs := api.BackupStatus{Backup: api.Backup{
+			bs := api.BackupStatus{
 				Unit:            b.Unit,
 				Enabled:         b.Enabled,
 				Schedule:        b.Schedule,
@@ -398,7 +398,7 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 				RequiresMounts:  b.RequiresMounts,
 				HealthcheckUUID: b.HealthcheckUUID,
 				PauseService:    b.PauseService,
-			}}
+			}
 			// Fetch status using systemctl show
 			cmdRes, err := cmdrunner.New("api", "systemctl", "show", b.Unit, "--property=ActiveState,Result,ExecMainStartTimestamp,ExecMainExitTimestamp").
 				WithContext(r.Context()).
@@ -1200,7 +1200,7 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 
 		backups := make([]api.BackupStatus, 0, len(cfg.Backups))
 		for _, b := range cfg.Backups {
-			bs := api.BackupStatus{Backup: api.Backup{
+			bs := api.BackupStatus{
 				Unit:            b.Unit,
 				Enabled:         b.Enabled,
 				Schedule:        b.Schedule,
@@ -1208,7 +1208,7 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 				RequiresMounts:  b.RequiresMounts,
 				HealthcheckUUID: b.HealthcheckUUID,
 				PauseService:    b.PauseService,
-			}}
+			}
 			if m := backupProps[b.Unit]; m != nil {
 				bs.ActiveState = m["ActiveState"]
 				bs.Result = m["Result"]

@@ -13,14 +13,21 @@ type Backup struct {
 }
 
 // BackupStatus is the runtime status emitted by GET /api/v1/backups.
-// Embeds Backup so all static config fields are present too.
+// Fields are flat (not embedded from Backup) so the generated TypeScript
+// interface has direct property access: backups[0].unit, not backups[0].Backup.unit.
 type BackupStatus struct {
-	Backup
-	ActiveState  string `json:"active_state"`
-	Result       string `json:"result"`
-	LastRunStart string `json:"last_run_start"`
-	LastRunEnd   string `json:"last_run_end"`
-	NextRun      string `json:"next_run"`
+	Unit            string   `json:"unit"`
+	Enabled         bool     `json:"enabled"`
+	Schedule        string   `json:"schedule"` // cron expression
+	DependsOn       []string `json:"depends_on"`
+	RequiresMounts  []string `json:"requires_mount"`
+	HealthcheckUUID string   `json:"healthcheck_uuid"`
+	PauseService    string   `json:"pause_service"`
+	ActiveState     string   `json:"active_state"`
+	Result          string   `json:"result"`
+	LastRunStart    string   `json:"last_run_start"`
+	LastRunEnd      string   `json:"last_run_end"`
+	NextRun         string   `json:"next_run"`
 }
 
 // PatchBackupRequest is the body for PATCH /api/v1/backups/{unit}.
