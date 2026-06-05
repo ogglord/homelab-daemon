@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOverview } from "@/hooks/use-overview";
-import { Info } from "lucide-react";
+import { Info, Clock, Package } from "lucide-react";
 
 export function SystemInfoWidget() {
   const { data: stats } = useOverview((o) => o?.Stats);
@@ -14,11 +14,11 @@ export function SystemInfoWidget() {
     );
   }
 
-  const rows = [
+  const sysRows: [string, string][] = [
     ["OS", stats.System.OS],
     ["Kernel", stats.System.KernelVersion],
     ["CPU", stats.System.CPUModel],
-    ...(stats.System.Motherboard ? [["Board", stats.System.Motherboard]] : []),
+    ...(stats.System.Motherboard ? [["Board", stats.System.Motherboard] as [string, string]] : []),
   ];
 
   return (
@@ -30,14 +30,32 @@ export function SystemInfoWidget() {
           <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">System Info</span>
         </div>
 
-        {/* Tight key/value grid */}
+        {/* System info rows */}
         <div className="space-y-1">
-          {rows.map(([key, value]) => (
+          {sysRows.map(([key, value]) => (
             <div key={key} className="flex justify-between gap-2 text-xs">
               <span className="text-muted-fg shrink-0">{key}</span>
               <span className="font-mono text-fg truncate text-right" title={String(value)}>{value}</span>
             </div>
           ))}
+        </div>
+
+        {/* Status section — separated visually */}
+        <div className="pt-1.5 mt-1.5 border-t border-border space-y-1">
+          <div className="flex justify-between gap-2 text-xs">
+            <span className="flex items-center gap-1 text-muted-fg shrink-0">
+              <Clock className="h-3 w-3" />
+              Uptime
+            </span>
+            <span className="font-mono text-fg text-right">{stats.UptimeStr}</span>
+          </div>
+          <div className="flex justify-between gap-2 text-xs">
+            <span className="flex items-center gap-1 text-muted-fg shrink-0">
+              <Package className="h-3 w-3" />
+              Packages
+            </span>
+            <span className="font-mono text-fg text-right">{stats.System.Packages.toLocaleString()}</span>
+          </div>
         </div>
       </CardContent>
     </Card>

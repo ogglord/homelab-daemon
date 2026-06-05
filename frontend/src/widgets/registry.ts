@@ -4,7 +4,6 @@ import { SystemInfoWidget } from './system/SystemInfoWidget';
 import { StorageWidget } from './storage/StorageWidget';
 import { ServicesWidget } from './services/ServicesWidget';
 import { TemperatureWidget } from './system/TemperatureWidget';
-import { UptimeWidget } from './system/UptimeWidget';
 import { GpuEnginesWidget } from './system/GpuEnginesWidget';
 import { GpuPowerWidget } from './system/GpuPowerWidget';
 import { DisksWidget } from './system/DisksWidget';
@@ -48,12 +47,6 @@ export const WIDGETS: WidgetDefinition[] = [
     id: 'temperature',
     name: 'Temperatures',
     component: TemperatureWidget,
-    defaultGridSpan: 1,
-  },
-  {
-    id: 'uptime',
-    name: 'Uptime & Packages',
-    component: UptimeWidget,
     defaultGridSpan: 1,
   },
   {
