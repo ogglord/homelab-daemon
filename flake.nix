@@ -14,11 +14,16 @@
           config.allowUnfree = true;
         };
 
+        vendorHash = "sha256-4sksG1I9DrQ4rZYnDbXfFGuncSP/gFDdJk6wVOl8Wdc=";
+
         daemon = pkgs.buildGoModule {
           pname = "homelab-daemon";
           version = "0.1.0";
           src = ./.;
-          vendorHash = null;
+          inherit vendorHash;
+          postPatch = ''
+            rm -rf vendor
+          '';
           nativeBuildInputs = [ pkgs.pkg-config ];
           buildInputs = [ pkgs.libvirt ];
           subPackages = [ "cmd/daemon" ];
@@ -36,7 +41,10 @@
           pname = "homelab";
           version = "0.1.0";
           src = ./.;
-          vendorHash = null;
+          inherit vendorHash;
+          postPatch = ''
+            rm -rf vendor
+          '';
           nativeBuildInputs = [ pkgs.pkg-config ];
           buildInputs = [ pkgs.libvirt ];
           subPackages = [ "cmd/cli" ];
@@ -88,7 +96,7 @@
         devShells.default = pkgs.mkShell {
           name = "homelab-daemon-dev";
           buildInputs = with pkgs; [
-            go gopls golangci-lint pkg-config libvirt nodejs
+            go gopls golangci-lint pkg-config libvirt nodejs tygo
           ];
           shellHook = ''
             echo "homelab-daemon dev shell (go $(go version | cut -d' ' -f3))"
