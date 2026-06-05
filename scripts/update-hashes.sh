@@ -8,10 +8,7 @@ FLAKE="$(git rev-parse --show-toplevel)/flake.nix"
 
 get_hash() {
   local pkg=$1
-  echo "==> Fetching new hash for ${pkg}..."
-  # Run nix build and parse the error output for the 'got:' hash.
-  # nix build exits 1 on hash mismatch — we need to survive that so
-  # grep can extract the corrected hash from stderr.
+  # nix build fails with a hash mismatch; capture the got: line from stderr.
   ( nix build ".#${pkg}" --no-link 2>&1 || true ) | grep "got:" | awk '{print $2}' | tail -1
 }
 

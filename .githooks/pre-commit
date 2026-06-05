@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — auto-update vendor/npm hashes before commit.
+# Only runs if relevant dependency files changed.
+set -euo pipefail
+
+CHANGED=$(git diff --cached --name-only)
+
+needs_update() {
+  local pattern=$1
+  echo "$CHANGED" | grep -qE "$pattern"
+}
+
+# Only run if dependency files or api types changed
+if needs_update 'go\.(mod|sum)|pkg/api/.*\.go|frontend/package-lock\.json|flake\.nix'; then
+  echo "⟳ Dependency files changed — updating vendorHash/npmDepsHash..."
+
+  SCRIPT="$(git rev-parse --show-toplevel)/scripts/update-hashes.sh"
+
+  # Update vendor hash if Go deps or api types changed
+  if needs_update 'go\.(mod|sum)|pkg/api/.*\.go'; then
+    echo "  → vendorHash"
+    "$SCRIPT" daemon 2>&1 | tail -1
+  fi
+
+  # Update npm hash if package-lock changed
+  if needs_update 'frontend/package-lock\.json|flake\.nix'; then
+    echo "  → npmDepsHash"
+    "$SCRIPT" frontend 2>&1 | tail -1
+  fi
+
+  # Re-stage flake.nix if hashes were updated
+  git add flake.nix 2>/dev/null || true
+fi

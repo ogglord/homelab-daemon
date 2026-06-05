@@ -101,6 +101,8 @@
           shellHook = ''
             echo "homelab-daemon dev shell (go $(go version | cut -d' ' -f3))"
             echo "node $(node --version) / npm $(npm --version)"
+            # Use repo-local githooks (auto-update hashes pre-commit)
+            git config core.hooksPath .githooks 2>/dev/null || true
           '';
         };
       }
