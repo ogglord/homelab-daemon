@@ -217,13 +217,32 @@ func formatUptime(uptime uint64) string {
 }
 
 func isPhysicalInterface(iface string) bool {
-	if iface == "lo" || strings.HasPrefix(iface, "veth") || strings.HasPrefix(iface, "docker") ||
-		strings.HasPrefix(iface, "br-") || strings.HasPrefix(iface, "virbr") ||
-		strings.HasPrefix(iface, "tun") || strings.HasPrefix(iface, "tap") {
+	// Exclude virtual, tunnel, and bridge interfaces.
+	switch {
+	case iface == "lo":
+		return false
+	case strings.HasPrefix(iface, "veth"):
+		return false
+	case strings.HasPrefix(iface, "docker"):
+		return false
+	case strings.HasPrefix(iface, "br-"):
+		return false
+	case strings.HasPrefix(iface, "virbr"):
+		return false
+	case strings.HasPrefix(iface, "tun"):
+		return false
+	case strings.HasPrefix(iface, "tap"):
+		return false
+	case strings.HasPrefix(iface, "tailscale"):
+		return false
+	case strings.HasPrefix(iface, "podman"):
+		return false
+	case strings.HasPrefix(iface, "cni-"):
 		return false
 	}
-	return strings.HasPrefix(iface, "e") || strings.HasPrefix(iface, "w") ||
-		strings.HasPrefix(iface, "p") || strings.HasPrefix(iface, "f")
+	// Only include Ethernet and WiFi physical interfaces.
+	return strings.HasPrefix(iface, "eth") || strings.HasPrefix(iface, "en") ||
+		strings.HasPrefix(iface, "wl") || strings.HasPrefix(iface, "ww")
 }
 
 func (c *Collector) collectStaticInfo() HostInfo {

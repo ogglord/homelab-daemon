@@ -16,9 +16,6 @@ func TestIsPhysicalInterface(t *testing.T) {
 		{"enp3s0", true},
 		{"wlan0", true},
 		{"wlx1234", true},
-		{"wwan0", true},
-		{"pci0", true},
-		{"f0", true},
 		// Virtual / excluded.
 		{"lo", false},
 		{"veth12345", false},
@@ -27,9 +24,14 @@ func TestIsPhysicalInterface(t *testing.T) {
 		{"virbr0", false},
 		{"tun0", false},
 		{"tap0", false},
+		{"tailscale0", false},
+		{"podman0", false},
+		{"cni-podman0", false},
 		// Edge cases.
 		{"", false},
-		{"zlo", false}, // doesn't start with e/w/p/f
+		{"zlo", false},   // doesn't start with en/wl
+		{"pci0", false},  // not en/wl, used to slip through old 'p' prefix
+		{"f0", false},    // not en/wl, used to slip through old 'f' prefix
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
