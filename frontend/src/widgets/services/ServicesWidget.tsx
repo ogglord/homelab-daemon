@@ -6,6 +6,12 @@ import type { ServiceInfo } from "@/types";
 
 const FALLBACK_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Crect x='2' y='2' width='20' height='8' rx='2'/%3E%3Crect x='2' y='14' width='20' height='8' rx='2'/%3E%3C/svg%3E";
 
+function fmtName(name: string): string {
+  return name
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function StatusDotSVG({ color }: { color: string }) {
   return (
     <svg
@@ -62,16 +68,16 @@ export function ServicesWidget() {
                 `}
               >
                 {/* Name above icon */}
-                <span className="text-[10px] font-medium text-center leading-tight truncate mb-1">
-                  {s.name}
+                <span className="text-xs font-medium text-center leading-tight truncate mb-1">
+                  {fmtName(s.name)}
                 </span>
                 {/* Square icon with status dot overlay */}
                 <div className="flex-1 flex items-center justify-center relative min-h-0">
                   <div className="relative inline-flex">
                     <img
                       src={s.icon_url || FALLBACK_ICON}
-                      alt=""
-                      className="size-6 object-contain"
+                      alt={s.name}
+                      className="size-7 object-contain"
                       loading="lazy"
                       onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_ICON; }}
                     />

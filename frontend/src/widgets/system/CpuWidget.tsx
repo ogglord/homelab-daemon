@@ -24,7 +24,7 @@ export function CpuWidget() {
         </div>
 
         {/* Chart area with overlaid value */}
-        <div className="relative mt-1">
+        <div className="relative mt-1 min-h-[56px]">
           <Sparkline
             data={history}
             width={400}
