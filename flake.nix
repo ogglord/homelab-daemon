@@ -1,5 +1,5 @@
 {
-  description = "homelab-daemon — service orchestrator + homelab CLI + web dashboard";
+  description = "homelab-daemon — service orchestrator + homelab CLI + web frontend";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -14,9 +14,6 @@
           config.allowUnfree = true;
         };
 
-        # ── public packages ─────────────────────────────────────────────
-
-        # The daemon HTTP server (privileged orchestrator).
         daemon = pkgs.buildGoModule {
           pname = "homelab-daemon";
           version = "0.1.0";
@@ -35,7 +32,6 @@
           };
         };
 
-        # The homelab CLI (talks to the daemon over its Unix socket).
         cli = pkgs.buildGoModule {
           pname = "homelab";
           version = "0.1.0";
@@ -54,19 +50,12 @@
           };
         };
 
-        # The web frontend (React/Vite, served by Caddy).
         frontend = pkgs.buildNpmPackage {
           name = "homelab-frontend";
-          src = ./.;
-          sourceRoot = "frontend";
+          src = ./frontend;
           npmDepsHash = "sha256-KIGUZ3+9Kq1zDS8bjZMI7C7+sk5cV9nZunZuwGq+22E=";
           dontNpmBuild = true;
           npmFlags = [ "--loglevel=error" ];
-          preBuild = ''
-            # Link generated types from api-types/ (in parent src) into
-            # the frontend source so TypeScript can resolve @/types.
-            ln -sf ../api-types/index.ts src/types.gen.ts
-          '';
           buildPhase = ''
             runHook preBuild
             npm run build
@@ -84,7 +73,6 @@
       {
         packages = rec {
           inherit daemon cli frontend;
-          # Combined: both daemon + CLI (for legacy compatibility).
           homelab-daemon = pkgs.symlinkJoin {
             name = "homelab-daemon";
             paths = [ daemon cli ];
@@ -100,12 +88,7 @@
         devShells.default = pkgs.mkShell {
           name = "homelab-daemon-dev";
           buildInputs = with pkgs; [
-            go
-            gopls
-            golangci-lint
-            pkg-config
-            libvirt
-            nodejs
+            go gopls golangci-lint pkg-config libvirt nodejs
           ];
           shellHook = ''
             echo "homelab-daemon dev shell (go $(go version | cut -d' ' -f3))"
@@ -114,7 +97,6 @@
         };
       }
     )
-    # ── NixOS module ────────────────────────────────────────────────────
     // {
       nixosModules.default = { pkgs, lib, ... }: {
         options.services.homelab-daemon = {
@@ -125,7 +107,6 @@
             description = "Enable the web dashboard frontend.";
           };
         };
-
         config = lib.mkIf (lib.attrByPath [ "services" "homelab-daemon" "enable" ] false { }) {
           environment.systemPackages = [
             self.packages.${pkgs.system}.cli
