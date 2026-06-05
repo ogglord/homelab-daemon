@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+
+      - name: Run go vet
+        run: nix develop --command bash -c 'go vet ./... 2>&1'
+
+      - name: Run go test
+        run: nix develop --command bash -c 'go test ./... 2>&1'
+
+      - name: Build daemon + CLI
+        run: nix build .#daemon .#cli --no-link
