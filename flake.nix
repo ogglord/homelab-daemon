@@ -57,15 +57,15 @@
         # The web frontend (React/Vite, served by Caddy).
         frontend = pkgs.buildNpmPackage {
           name = "homelab-frontend";
-          src = ./frontend;
+          src = ./.;
+          sourceRoot = "frontend";
           npmDepsHash = "sha256-KIGUZ3+9Kq1zDS8bjZMI7C7+sk5cV9nZunZuwGq+22E=";
           dontNpmBuild = true;
           npmFlags = [ "--loglevel=error" ];
           preBuild = ''
-            # Ensure generated types from pkg/api are available to the build.
-            # This symlink makes src/types.gen.ts point at the generated file.
-            mkdir -p src
-            ln -sf ../../api-types/index.ts src/types.gen.ts
+            # Link generated types from api-types/ (in parent src) into
+            # the frontend source so TypeScript can resolve @/types.
+            ln -sf ../api-types/index.ts src/types.gen.ts
           '';
           buildPhase = ''
             runHook preBuild
