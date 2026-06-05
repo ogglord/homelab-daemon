@@ -20,7 +20,7 @@ export function GpuEnginesWidget() {
         </div>
 
         {/* Ring gauges */}
-        <div className="flex items-center justify-around">
+        <div className="flex items-center justify-center gap-4 flex-wrap">
           <div className="flex flex-col items-center gap-1">
             <RingGauge
               value={stats.Gpu.RenderBusy}

@@ -82,6 +82,13 @@ export default function OverviewPage() {
     return computeRows(active, 4);
   }, [layout]);
 
+  /** Responsive column-span: mobile always 1, desktop respects item.span */
+  function spanClass(span: number) {
+    if (span === 4) return 'col-span-1 md:col-span-4';
+    if (span === 2) return 'col-span-1 md:col-span-2';
+    return 'col-span-1 md:col-span-1';
+  }
+
   return (
     <div className="space-y-2 pb-12">
       <div className="flex justify-between items-center">
@@ -93,14 +100,16 @@ export default function OverviewPage() {
 
       <div className="flex flex-col gap-2">
         {rows.map((row, ri) => (
-          <div key={ri} className="grid grid-cols-4 gap-2 auto-rows-auto">
+          <div key={ri} className="grid grid-cols-1 md:grid-cols-4 gap-2 auto-rows-auto">
             {row.items.map((item) => {
               const widget = WIDGETS.find((w) => w.id === item.id);
               if (!widget) return null;
               const Component = widget.component;
               return (
-                <div key={item.id} className="h-full" style={{ gridColumn: `span ${item.span} / span ${item.span}` }}>
-                  <Component />
+                <div key={item.id} className={`min-w-0 ${spanClass(item.span)}`}>
+                  <div className="h-full">
+                    <Component />
+                  </div>
                 </div>
               );
             })}
