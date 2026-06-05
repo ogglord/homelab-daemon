@@ -139,8 +139,8 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 
 	// piStreamingHandler proxies pi-web sessiond's /health endpoint to
 	// provide a streaming indicator for the Agent pill in the dashboard.
-	// Results are cached with a 2s TTL so the 5s dashboard poll doesn't
-	// hammer the sessiond socket on every call.
+	// Results are cached with a 20s TTL; pi sessions rarely change state
+	// so it's not worth hitting sessiond on every 5s dashboard poll.
 	piStreamingHandler := func(w http.ResponseWriter, _ *http.Request) {
 		piStreamingMu.Lock()
 		cached := piStreamingCache
@@ -175,7 +175,7 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 		piStreamingCache = struct {
 			json     []byte
 			deadline time.Time
-		}{raw, time.Now().Add(2 * time.Second)}
+		}{raw, time.Now().Add(20 * time.Second)}
 		piStreamingMu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
