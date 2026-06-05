@@ -1,14 +1,13 @@
 import { useState, useMemo } from "react";
 import { Bug, Clipboard, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
-import { PageShell, useTable, RowActions } from "@/components/data-table";
+import { PageShell, useTable, RowActions, useRowContextMenu } from "@/components/data-table";
 import { ModalContent, ModalHeader, ModalTitle, ModalBody } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import {
-  MenuItem,
-} from "@/components/ui/menu";
+import { MenuItem } from "@/components/ui/menu";
+import { ContextMenuItem } from "@/components/ui/context-menu";
 import {
   Table, TableBody, TableCell, TableColumn, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -88,6 +87,8 @@ export default function BackupsPage() {
   });
   const [isBugOpen, setIsBugOpen] = useState(false);
   const [bugService, setBugService] = useState("");
+
+  const onRowCtx = useRowContextMenu<BackupStatus>();
 
   const { filterText, setFilterText, filtered, sorted } = useTable<BackupStatus>({
     data: jobs ?? [],
@@ -169,6 +170,13 @@ export default function BackupsPage() {
         onFilterChange={setFilterText}
         emptyMessage="No backup jobs found"
         emptyDescription="B2 backup systemd timers will appear here"
+        contextMenu={(item) => (
+          <>
+            <ContextMenuItem onAction={() => setEditingJob(item)}>Edit</ContextMenuItem>
+            <ContextMenuItem intent="danger" onAction={() => runJob(item.unit)}>Run now</ContextMenuItem>
+            <ContextMenuItem onAction={() => showLogs(item.unit)}>Logs</ContextMenuItem>
+          </>
+        )}
       >
         <Table className="mt-4" aria-label="Backup Jobs">
           <TableHeader columns={[
@@ -190,7 +198,7 @@ export default function BackupsPage() {
             {(job: BackupStatus) => {
               const requiresMount = (job.requires_mount ?? []).join(", ") || "\u2014";
               return (
-                <TableRow>
+                <TableRow onContextMenu={onRowCtx(job)}>
                   <TableCell className="text-sm">{job.unit}</TableCell>
                   <TableCell className="text-sm text-muted-fg hidden sm:table-cell">
                     {job.last_run_start && job.last_run_end ? (

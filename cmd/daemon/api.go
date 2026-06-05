@@ -471,8 +471,7 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 			http.Error(w, fmt.Sprintf(`{"error": %q}`, err.Error()), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte(res.Output))
+		writeJSON(w, map[string]any{"success": true, "logs": res.Output})
 	})
 
 	mux.HandleFunc("PATCH /api/backups/{unit}", func(w http.ResponseWriter, r *http.Request) {
@@ -1197,7 +1196,7 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 			backupUnits = append(backupUnits, b.Unit)
 		}
 		backupProps := fetchSystemdProps(backupUnits,
-			"ActiveState", "Result", "ExecMainStartTimestamp", "ExecMainExitTimestamp",
+			"Id", "ActiveState", "Result", "ExecMainStartTimestamp", "ExecMainExitTimestamp",
 		)
 
 		backups := make([]api.BackupStatus, 0, len(cfg.Backups))
