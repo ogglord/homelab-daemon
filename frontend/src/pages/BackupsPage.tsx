@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Bug, Clipboard, MoreVertical } from "lucide-react";
+import { useState } from "react";
+import { Bug, Clipboard } from "lucide-react";
 import { toast } from "sonner";
 import { PageShell, useTable, RowActions, useRowContextMenu } from "@/components/data-table";
 import { ModalContent, ModalHeader, ModalTitle, ModalBody } from "@/components/ui/modal";
@@ -78,6 +78,82 @@ function StateBadge({ state, result, enabled }: { state: string; result: string;
 
 // ── Page ────────────────────────────────────────────────────────────────
 
+// ── Inner table component (rendered inside PageShell so useRowContextMenu works) ──
+
+function BackupsTableContent({ jobs, onEdit, onRun, onLogs }: {
+  jobs: BackupStatus[];
+  onEdit: (job: BackupStatus) => void;
+  onRun: (name: string) => void;
+  onLogs: (name: string) => void;
+}) {
+  const onRowCtx = useRowContextMenu<BackupStatus>();
+
+  return (
+    <Table className="mt-4" aria-label="Backup Jobs">
+      <TableHeader columns={[
+        { id: "name", name: "Name", isRowHeader: true, className: "w-[250px]" },
+        { id: "lastRun", name: "Last Run", className: "w-[140px] hidden sm:table-cell" },
+        { id: "nextRun", name: "Next Run", className: "w-[140px] hidden sm:table-cell" },
+        { id: "requiresMount", name: "Requires Mount", className: "w-[180px] hidden lg:table-cell" },
+        { id: "status", name: "Status", className: "w-[120px]" },
+        { id: "result", name: "Result", className: "w-[120px] hidden md:table-cell" },
+        { id: "actions", name: "", className: "w-[60px]" },
+      ] as Array<{ id: string; name: string; isRowHeader?: boolean; className?: string }>}>
+        {(column) => (
+          <TableColumn isRowHeader={column.isRowHeader} className={column.className ?? ""}>
+            {column.name}
+          </TableColumn>
+        )}
+      </TableHeader>
+      <TableBody items={jobs}>
+        {(job: BackupStatus) => {
+          const requiresMount = (job.requires_mount ?? []).join(", ") || "\u2014";
+          return (
+            <TableRow onContextMenu={onRowCtx(job)}>
+              <TableCell className="text-sm">{job.unit}</TableCell>
+              <TableCell className="text-sm text-muted-fg hidden sm:table-cell">
+                {job.last_run_start && job.last_run_end ? (
+                  <Tooltip>
+                    <TooltipTrigger className="cursor-default">
+                      {timeSince(job.last_run_start)}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Duration: {durationBetween(job.last_run_start, job.last_run_end)}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  timeSince(job.last_run_start)
+                )}
+              </TableCell>
+              <TableCell className="text-sm text-muted-fg hidden sm:table-cell">
+                {timeUntil(job.next_run)}
+              </TableCell>
+              <TableCell className="text-sm text-muted-fg hidden lg:table-cell">
+                {requiresMount}
+              </TableCell>
+              <TableCell>
+                <StateBadge state={job.active_state} result={job.result ?? ""} enabled={job.enabled ?? false} />
+              </TableCell>
+              <TableCell className="text-sm text-muted-fg hidden md:table-cell">
+                {job.result ?? "\u2014"}
+              </TableCell>
+              <TableCell>
+                <RowActions label={`Actions for ${job.unit}`}>
+                  <MenuItem onAction={() => onEdit(job)}>Edit</MenuItem>
+                  <MenuItem intent="danger" onAction={() => onRun(job.unit)}>Run now</MenuItem>
+                  <MenuItem onAction={() => onLogs(job.unit)}>Logs</MenuItem>
+                </RowActions>
+              </TableCell>
+            </TableRow>
+          );
+        }}
+      </TableBody>
+    </Table>
+  );
+}
+
+// ── Page ────────────────────────────────────────────────────────────────
+
 export default function BackupsPage() {
   const { data: jobs } = useOverview((o) => o?.Backups ?? null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -87,8 +163,6 @@ export default function BackupsPage() {
   });
   const [isBugOpen, setIsBugOpen] = useState(false);
   const [bugService, setBugService] = useState("");
-
-  const onRowCtx = useRowContextMenu<BackupStatus>();
 
   const { filterText, setFilterText, filtered, sorted } = useTable<BackupStatus>({
     data: jobs ?? [],
@@ -178,66 +252,12 @@ export default function BackupsPage() {
           </>
         )}
       >
-        <Table className="mt-4" aria-label="Backup Jobs">
-          <TableHeader columns={[
-            { id: "name", name: "Name", isRowHeader: true, className: "w-[250px]" },
-            { id: "lastRun", name: "Last Run", className: "w-[140px] hidden sm:table-cell" },
-            { id: "nextRun", name: "Next Run", className: "w-[140px] hidden sm:table-cell" },
-            { id: "requiresMount", name: "Requires Mount", className: "w-[180px] hidden lg:table-cell" },
-            { id: "status", name: "Status", className: "w-[120px]" },
-            { id: "result", name: "Result", className: "w-[120px] hidden md:table-cell" },
-            { id: "actions", name: "", className: "w-[60px]" },
-          ] as Array<{ id: string; name: string; isRowHeader?: boolean; className?: string }>}>
-            {(column) => (
-              <TableColumn isRowHeader={column.isRowHeader} className={column.className ?? ""}>
-                {column.name}
-              </TableColumn>
-            )}
-          </TableHeader>
-          <TableBody items={sorted}>
-            {(job: BackupStatus) => {
-              const requiresMount = (job.requires_mount ?? []).join(", ") || "\u2014";
-              return (
-                <TableRow onContextMenu={onRowCtx(job)}>
-                  <TableCell className="text-sm">{job.unit}</TableCell>
-                  <TableCell className="text-sm text-muted-fg hidden sm:table-cell">
-                    {job.last_run_start && job.last_run_end ? (
-                      <Tooltip>
-                        <TooltipTrigger className="cursor-default">
-                          {timeSince(job.last_run_start)}
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          Duration: {durationBetween(job.last_run_start, job.last_run_end)}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : (
-                      timeSince(job.last_run_start)
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-fg hidden sm:table-cell">
-                    {timeUntil(job.next_run)}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-fg hidden lg:table-cell">
-                    {requiresMount}
-                  </TableCell>
-                  <TableCell>
-                    <StateBadge state={job.active_state} result={job.result ?? ""} enabled={job.enabled ?? false} />
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-fg hidden md:table-cell">
-                    {job.result ?? "\u2014"}
-                  </TableCell>
-                  <TableCell>
-                    <RowActions label={`Actions for ${job.unit}`}>
-                      <MenuItem onAction={() => setEditingJob(job)}>Edit</MenuItem>
-                      <MenuItem intent="danger" onAction={() => runJob(job.unit)}>Run now</MenuItem>
-                      <MenuItem onAction={() => showLogs(job.unit)}>Logs</MenuItem>
-                    </RowActions>
-                  </TableCell>
-                </TableRow>
-              );
-            }}
-          </TableBody>
-        </Table>
+        <BackupsTableContent
+          jobs={sorted}
+          onEdit={setEditingJob}
+          onRun={runJob}
+          onLogs={showLogs}
+        />
       </PageShell>
 
       {/* Logs Dialog */}
