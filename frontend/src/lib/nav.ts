@@ -43,6 +43,7 @@ export const navItems: NavItem[] = [
       { path: "https://files.cignl.cc", label: "Files" },
       { path: "/backups", label: "Backups" },
       { path: "https://filestash.cignl.cc", label: "Remote Files" },
+      { path: "https://auth.cignl.cc", label: "Auth" },
     ],
   },
   {
