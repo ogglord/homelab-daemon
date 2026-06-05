@@ -1,6 +1,37 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { WIDGETS } from "@/widgets/registry";
 import type { WidgetLayout } from "@/widgets/registry";
+import { useOverview } from "@/hooks/use-overview";
+
+type Row = { items: WidgetLayout[]; totalSpan: number };
+
+function computeRows(layout: WidgetLayout[], cols: number): Row[] {
+  const rows: Row[] = [];
+  let current: WidgetLayout[] = [];
+  let used = 0;
+
+  for (const item of layout) {
+    const span = Math.min(item.span, cols);
+    if (used + span > cols) {
+      rows.push({ items: current, totalSpan: used });
+      current = [];
+      used = 0;
+    }
+    current.push({ ...item, span: span as 1 | 2 | 4 });
+    used += span;
+  }
+  if (current.length > 0) rows.push({ items: current, totalSpan: used });
+
+  // Distribute leftover capacity to the last widget in each row.
+  for (const row of rows) {
+    if (row.totalSpan < cols && row.items.length > 0) {
+      const last = row.items[row.items.length - 1];
+      last.span = Math.min(last.span + (cols - row.totalSpan), cols) as 1 | 2 | 4;
+    }
+  }
+
+  return rows;
+}
 
 function PollChip() {
   const lastFetchRef = useRef(Date.now());
@@ -26,8 +57,6 @@ function PollChip() {
   );
 }
 
-import { useOverview } from "@/hooks/use-overview";
-
 export default function OverviewPage() {
   const [layout, setLayout] = useState<WidgetLayout[] | null>(null);
 
@@ -38,7 +67,6 @@ export default function OverviewPage() {
         if (Array.isArray(data)) setLayout(data);
       })
       .catch(() => {
-        // Fallback: use widget registry order
         setLayout(
           WIDGETS.map((w) => ({
             id: w.id,
@@ -48,8 +76,14 @@ export default function OverviewPage() {
       });
   }, []);
 
+  const rows = useMemo(() => {
+    const active = (layout ?? [])
+      .filter((item) => WIDGETS.some((w) => w.id === item.id));
+    return computeRows(active, 4);
+  }, [layout]);
+
   return (
-    <div className="space-y-3 pb-12">
+    <div className="space-y-2 pb-12">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
           <span className="text-[10px] tracking-widest uppercase text-muted-fg font-mono">Overview</span>
@@ -57,24 +91,21 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-        {(layout ?? [])
-          .filter((item) => WIDGETS.some((w) => w.id === item.id))
-          .map((item) => {
-            const widget = WIDGETS.find((w) => w.id === item.id)!;
-            const Component = widget.component;
-            const colSpanClass =
-              item.span === 4
-                ? "md:col-span-4"
-                : item.span === 2
-                  ? "md:col-span-2"
-                  : "md:col-span-1";
-            return (
-              <div key={item.id} className={colSpanClass}>
-                <Component />
-              </div>
-            );
-          })}
+      <div className="flex flex-col gap-2">
+        {rows.map((row, ri) => (
+          <div key={ri} className="grid grid-cols-4 gap-2 auto-rows-auto">
+            {row.items.map((item) => {
+              const widget = WIDGETS.find((w) => w.id === item.id);
+              if (!widget) return null;
+              const Component = widget.component;
+              return (
+                <div key={item.id} className="h-full" style={{ gridColumn: `span ${item.span} / span ${item.span}` }}>
+                  <Component />
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );
