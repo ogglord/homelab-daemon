@@ -20,6 +20,11 @@ export interface WidgetDefinition {
   defaultGridSpan?: number; // E.g. 1 for standard, 2 for wide
 }
 
+export interface WidgetLayout {
+  id: string;
+  span: 1 | 2 | 4;
+}
+
 export const WIDGETS: WidgetDefinition[] = [
   {
     id: 'cpu',
