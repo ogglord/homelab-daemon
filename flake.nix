@@ -24,7 +24,7 @@
 
         daemon = pkgs.buildGoModule {
           pname = "homelab-daemon";
-          version = "0.1.0";
+          version = "0.2.0";
           src = ./.;
           inherit vendorHash;
           postPatch = ''
@@ -45,7 +45,7 @@
 
         cli = pkgs.buildGoModule {
           pname = "homelab";
-          version = "0.1.0";
+          version = "0.2.0";
           src = ./.;
           inherit vendorHash;
           postPatch = ''

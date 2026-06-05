@@ -1,7 +1,5 @@
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { Avatar } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Link } from "@/components/ui/link";
 import {
   Navbar,
   NavbarGap,
@@ -29,7 +27,6 @@ type AppNavbarProps = NavbarProps & {
 
 export default function AppNavbar({ navItems, hasStreaming = false, ...props }: AppNavbarProps) {
   const location = useLocation();
-  const navigate = useNavigate();
 
   function isCurrent(item: NavItem): boolean {
     if (!item.path) return false;
@@ -37,16 +34,15 @@ export default function AppNavbar({ navItems, hasStreaming = false, ...props }: 
     return location.pathname.startsWith(item.path);
   }
 
-  function navTo(path: string, target?: string | null) {
+  /** Navigate with a full page reload — no client-side router. */
+  function hardNav(path: string, target?: string | null) {
     const isExternal = path.startsWith("http://") || path.startsWith("https://");
-    if (isExternal) {
-      if (target === "_blank") {
-        window.open(path, "_blank", "noopener,noreferrer");
-      } else {
-        navigate(`/external/${encodeURIComponent(path)}`);
-      }
+    if (isExternal && target === "_blank") {
+      window.open(path, "_blank", "noopener,noreferrer");
+    } else if (isExternal) {
+      window.location.href = `/external/${encodeURIComponent(path)}`;
     } else {
-      navigate(path);
+      window.location.href = path;
     }
   }
 
@@ -54,10 +50,10 @@ export default function AppNavbar({ navItems, hasStreaming = false, ...props }: 
     <NavbarProvider>
       <Navbar intent="float" {...props}>
         <NavbarStart>
-          <Link
+          <a
+            href="/"
             className="flex items-center gap-x-2 font-medium"
             aria-label="homelab dashboard"
-            href="/"
           >
             <Avatar
               isSquare
@@ -68,7 +64,7 @@ export default function AppNavbar({ navItems, hasStreaming = false, ...props }: 
             <span>
               home<span className="text-muted-fg">lab</span>
             </span>
-          </Link>
+          </a>
         </NavbarStart>
         <NavbarGap />
         <NavbarSection>
@@ -85,7 +81,7 @@ export default function AppNavbar({ navItems, hasStreaming = false, ...props }: 
                   </MenuTrigger>
                   <MenuContent placement="bottom">
                     {item.path && (
-                      <MenuItem onAction={() => navTo(item.path!, item.target)}>
+                      <MenuItem href={item.path}>
                         {item.label}
                       </MenuItem>
                     )}
@@ -95,15 +91,12 @@ export default function AppNavbar({ navItems, hasStreaming = false, ...props }: 
                     {item.children!.map((child) => {
                       const childPath = child.path ?? "";
                       const childExternal = childPath.startsWith("http://") || childPath.startsWith("https://");
-                      const openBlank = childExternal && child.target === "_blank";
+                      const childBlank = childExternal && child.target === "_blank";
                       return (
                         <MenuItem
                           key={child.label}
-                          {...(openBlank
-                            ? { href: childPath, target: "_blank" }
-                            : childExternal
-                              ? { onAction: () => navigate(`/external/${encodeURIComponent(childPath)}`) }
-                              : { onAction: () => navigate(childPath) })}
+                          href={childBlank ? childPath : childExternal ? `/external/${encodeURIComponent(childPath)}` : childPath}
+                          {...(childBlank ? { target: "_blank" } : {})}
                         >
                           {child.label}
                         </MenuItem>
@@ -127,7 +120,7 @@ export default function AppNavbar({ navItems, hasStreaming = false, ...props }: 
                 <div key={item.path} className="flex items-center gap-x-0">
                   <NavbarItem
                     isCurrent={isCurrent(item)}
-                    onPress={() => navTo(item.path!, item.target)}
+                    onPress={() => hardNav(item.path!, item.target)}
                   >
                     <span
                       className={`inline-flex items-center gap-x-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -171,12 +164,12 @@ export default function AppNavbar({ navItems, hasStreaming = false, ...props }: 
               );
             }
 
-            // ── Plain nav link ──
+            // ── Plain nav link — full page reload ──
             return (
               <NavbarItem
                 key={item.path}
                 isCurrent={isCurrent(item)}
-                onPress={() => navTo(item.path!, item.target)}
+                onPress={() => hardNav(item.path!, item.target)}
               >
                 {item.label}
               </NavbarItem>
