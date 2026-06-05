@@ -190,6 +190,11 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 			http.Error(w, `{"error":"unknown unit"}`, http.StatusBadRequest)
 			return
 		}
+		// Always clear user-stopped when user explicitly requests a start,
+		// even if constraints block the actual systemd start. Otherwise the
+		// blocked_reason would stay "stopped by user" and confuse the user.
+		state.SetUserStopped(unit, false)
+
 		// Enforce constraints (mounts) before starting.
 		for _, svc := range cfg.Services {
 			if svc.Unit == unit {
@@ -201,7 +206,6 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 				break
 			}
 		}
-		state.SetUserStopped(unit, false)
 		if err := startUnit(unit); err != nil {
 			apiLog.Error("API start failed", "unit", unit, "error", err)
 			writeJSON(w, map[string]any{"success": false, "error": err.Error()})
