@@ -205,8 +205,22 @@ func DiscoverPools() ([]Pool, error) {
 		}
 
 		if superValid {
-			log.Debug("reusing cached super block for sibling device", "device", d.Path)
-		} else {
+			// Only reuse the cache if this device is actually listed in the
+			// parsed superblock's device list. Non-bcachefs devices (NVMe,
+			// CD-ROM) pass the empty-fstype filter but aren't pool members.
+			found := false
+			for _, dev := range super.Devices {
+				if d.Path == dev.Path || strings.HasSuffix(d.Path, dev.Path) || (dev.Path != "" && strings.HasSuffix(dev.Path, d.Name)) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				log.Debug("device not in cached superblock, running fresh show-super", "device", d.Path)
+				superValid = false
+			}
+		}
+		if !superValid {
 			out, err := runCommand("bcachefs", "show-super", d.Path)
 			if err != nil {
 				log.Warn("bcachefs show-super failed (likely not a bcachefs device)", "device", d.Path, "error", err)
