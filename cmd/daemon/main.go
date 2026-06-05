@@ -13,6 +13,7 @@ import (
 
 	logging "github.com/ogglord/homelab-logging"
 
+	"github.com/ogglord/homelab-daemon/internal/cmdrunner"
 	"github.com/ogglord/homelab-daemon/internal/collector"
 	"github.com/ogglord/homelab-daemon/internal/storage/bcachefs"
 	"github.com/ogglord/homelab-daemon/internal/updates"
@@ -198,6 +199,10 @@ func main() {
 						devices = append(devices, d.Path)
 					}
 					mainLog.Info("auto-mounting pool", "uuid", pConf.UUID, "mountpoint", pConf.Mountpoint)
+					// Remove immutable flag — /pool is set +i at boot
+					// to prevent writes to the bare directory when the
+					// bcachefs pool is not mounted.
+					cmdrunner.New("boot", "chattr", "-i", pConf.Mountpoint).Run()
 					if err := bcachefs.Mount(devices, pConf.Mountpoint); err != nil {
 						mainLog.Error("failed to auto-mount pool", "uuid", pConf.UUID, "error", err)
 					}
