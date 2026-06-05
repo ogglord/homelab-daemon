@@ -68,10 +68,11 @@ function StateBadge({ state, result, enabled }: { state: string; result: string;
   }
 
   const tone = isActive ? "success" : isFailed ? "danger" : "secondary";
+  const label = state === "activating" ? "Running" : state || "inactive";
   return (
     <span className="inline-flex items-center gap-1.5 text-sm">
       <StatusDot intent={tone} />
-      {state || "inactive"}
+      {label}
     </span>
   );
 }
