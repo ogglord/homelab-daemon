@@ -22,6 +22,36 @@ import (
 	api "github.com/ogglord/homelab-api"
 )
 
+// ── pi-web sessiond client ───────────────────────────────────────────────
+//
+// Shared HTTP client for /api/pi/streaming. Created once, reused across
+// every 5s poll from the dashboard. A short TTL cache prevents hammering
+// sessiond's /health endpoint on every request.
+
+var (
+	piSessiondOnce   sync.Once
+	piSessiondClient *http.Client
+	piStreamingMu    sync.Mutex
+	piStreamingCache struct {
+		json     []byte
+		deadline time.Time
+	}
+)
+
+func getPiSessiondClient() *http.Client {
+	piSessiondOnce.Do(func() {
+		piSessiondClient = &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+					return net.Dial("unix", "/cache/appdata/pi-web/sessiond.sock")
+				},
+			},
+			Timeout: 3 * time.Second,
+		}
+	})
+	return piSessiondClient
+}
+
 // computeBlockedReason returns a human-readable explanation for why
 // the daemon is not starting/restarting a service. Returns empty string
 // if the service is active or there is no clear blocker.
@@ -109,15 +139,20 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 
 	// piStreamingHandler proxies pi-web sessiond's /health endpoint to
 	// provide a streaming indicator for the Agent pill in the dashboard.
+	// Results are cached with a 2s TTL so the 5s dashboard poll doesn't
+	// hammer the sessiond socket on every call.
 	piStreamingHandler := func(w http.ResponseWriter, _ *http.Request) {
-		client := http.Client{
-			Transport: &http.Transport{
-				DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-					return net.Dial("unix", "/cache/appdata/pi-web/sessiond.sock")
-				},
-			},
-			Timeout: 3 * time.Second,
+		piStreamingMu.Lock()
+		cached := piStreamingCache
+		piStreamingMu.Unlock()
+
+		if time.Now().Before(cached.deadline) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(cached.json)
+			return
 		}
+
+		client := getPiSessiondClient()
 		resp, err := client.Get("http://localhost/health")
 		if err != nil {
 			writeJSON(w, map[string]any{"streaming": false, "error": err.Error()})
@@ -131,10 +166,20 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 			writeJSON(w, map[string]any{"streaming": false, "error": err.Error()})
 			return
 		}
-		writeJSON(w, map[string]any{
+		raw, _ := json.Marshal(map[string]any{
 			"streaming":      health.ActiveSessions > 0,
 			"activeSessions": health.ActiveSessions,
 		})
+
+		piStreamingMu.Lock()
+		piStreamingCache = struct {
+			json     []byte
+			deadline time.Time
+		}{raw, time.Now().Add(2 * time.Second)}
+		piStreamingMu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(raw)
 	}
 	mux.HandleFunc("GET /api/pi/streaming", piStreamingHandler)
 	mux.HandleFunc("GET /api/v1/pi/streaming", piStreamingHandler)
