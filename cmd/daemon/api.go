@@ -1167,6 +1167,8 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 				BackoffSeconds:  backoffSecs,
 				BlockedReason:   computeBlockedReason(svc, activeState, consecutive, backoffUntil, state.IsUserStopped(u)),
 				RequiresMounts:  svc.RequiresMounts,
+				IconURL:         svc.IconURL,
+				HomepageURL:     svc.HomepageURL,
 			})
 		}
 

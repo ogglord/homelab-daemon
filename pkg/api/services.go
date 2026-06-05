@@ -11,6 +11,8 @@ type Service struct {
 	RequiresMounts []string `json:"requires_mount" yaml:"requires_mount"`
 	Restart        string   `json:"restart" yaml:"restart"`
 	RestartDelay   int      `json:"restart_delay" yaml:"restart_delay"`
+	IconURL        string   `json:"icon_url,omitempty" yaml:"icon_url,omitempty"`
+	HomepageURL    string   `json:"homepage_url,omitempty" yaml:"homepage_url,omitempty"`
 }
 
 // ServiceStatus is the per-unit runtime status emitted by
@@ -33,6 +35,8 @@ type ServiceStatus struct {
 	FailureCount   int      `json:"failure_count"`  // consecutive failures since last success
 	BackoffUntil   string   `json:"backoff_until"`  // RFC3339; empty if not backing off
 	BlockedReason  string   `json:"blocked_reason"` // why the daemon won't start/restart this service
+	IconURL        string   `json:"icon_url,omitempty"`
+	HomepageURL    string   `json:"homepage_url,omitempty"`
 }
 
 // PatchServiceRequest is the JSON body for PATCH /api/v1/config/{unit}.
@@ -78,4 +82,6 @@ type ServiceInfo struct {
 	BackoffSeconds  int      `json:"backoff_seconds"`
 	BlockedReason   string   `json:"blocked_reason"`  // why the daemon won't start/restart this service
 	RequiresMounts  []string `json:"requires_mount"`  // mountpoints that must be present
+	IconURL         string   `json:"icon_url,omitempty"`
+	HomepageURL     string   `json:"homepage_url,omitempty"`
 }

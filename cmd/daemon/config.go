@@ -46,6 +46,8 @@ type Service struct {
 	RequiresMounts []string `yaml:"requires_mount"` // mountpoints that must be mounted first
 	Restart        string   `yaml:"restart"`        // no | on-failure | unless-stopped | always
 	RestartDelay   int      `yaml:"restart_delay"`  // seconds to wait before restarting
+	IconURL        string   `yaml:"icon_url"`       // service icon URL (selfh.st or custom)
+	HomepageURL    string   `yaml:"homepage_url"`   // frontend link, e.g. https://immich.cignl.cc
 }
 
 // Backup describes a daemon-managed backup job.

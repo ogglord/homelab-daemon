@@ -153,6 +153,8 @@ export interface Service {
   requires_mount: string[];
   restart: string;
   restart_delay: number /* int */;
+  icon_url?: string;
+  homepage_url?: string;
 }
 /**
  * ServiceStatus is the per-unit runtime status emitted by
@@ -176,6 +178,8 @@ export interface ServiceStatus {
   failure_count: number /* int */; // consecutive failures since last success
   backoff_until: string; // RFC3339; empty if not backing off
   blocked_reason: string; // why the daemon won't start/restart this service
+  icon_url?: string;
+  homepage_url?: string;
 }
 /**
  * PatchServiceRequest is the JSON body for PATCH /api/v1/config/{unit}.
@@ -224,6 +228,8 @@ export interface ServiceInfo {
   backoff_seconds: number /* int */;
   blocked_reason: string; // why the daemon won't start/restart this service
   requires_mount: string[]; // mountpoints that must be present
+  icon_url?: string;
+  homepage_url?: string;
 }
 
 //////////

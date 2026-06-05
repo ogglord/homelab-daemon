@@ -43,6 +43,8 @@ let
         "    requires_mount:\n"
         + lib.concatMapStrings (mnt: "      - ${mnt}\n") svc.requiresMounts
       )
+    + lib.optionalString (svc.icon != null) "    icon_url: ${lib.escapeShellArg svc.icon}\n"
+    + lib.optionalString (svc.homepage != null) "    homepage_url: ${lib.escapeShellArg svc.homepage}\n"
     + "\n";
 
   yamlBackupEntry = key: backupCfg:
@@ -129,6 +131,16 @@ in
           restartDelay = lib.mkOption { type = lib.types.int; default = 10; };
           dependsOn = lib.mkOption { type = lib.types.listOf lib.types.str; default = []; };
           requiresMounts = lib.mkOption { type = lib.types.listOf lib.types.str; default = []; };
+          icon = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "URL to an icon SVG for this service (e.g. https://selfh.st/icons/immich.svg).";
+          };
+          homepage = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Homepage URL for this service (e.g. https://immich.cignl.cc).";
+          };
         };
       });
       default = {};
