@@ -61,7 +61,7 @@ export function ServicesWidget() {
             const card = (
               <div
                 className={`
-                  flex flex-col items-stretch aspect-square rounded-xl p-2 transition-all
+                  flex flex-col items-stretch aspect-square rounded-xl p-2 transition-all max-w-[115px] max-h-[115px]
                   ${isActive ? "bg-accent/30 hover:bg-accent/50" : "bg-muted/10"}
                   ${isFailed ? "ring-1 ring-danger/30" : ""}
                   ${!isActive ? "opacity-45 grayscale" : ""}
