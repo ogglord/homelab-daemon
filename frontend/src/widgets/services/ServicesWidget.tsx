@@ -15,12 +15,12 @@ function fmtName(name: string): string {
 function StatusDotSVG({ color }: { color: string }) {
   return (
     <svg
-      width="10"
-      height="10"
-      viewBox="0 0 10 10"
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
       className="absolute -bottom-0.5 -right-0.5"
     >
-      <circle cx="5" cy="5" r="5" fill={color} stroke="var(--color-bg)" strokeWidth="1.5" />
+      <circle cx="6" cy="6" r="6" fill={color} stroke="var(--color-bg)" strokeWidth="1.5" />
     </svg>
   );
 }
@@ -77,7 +77,7 @@ export function ServicesWidget() {
                     <img
                       src={s.icon_url || FALLBACK_ICON}
                       alt={s.name}
-                      className="size-7 object-contain"
+                      className="size-10 object-contain"
                       loading="lazy"
                       onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_ICON; }}
                     />
