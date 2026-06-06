@@ -56,7 +56,7 @@ export function ServicesWidget() {
               ? "var(--color-danger)"
               : isActive
                 ? "var(--color-success)"
-                : "var(--color-muted-fg)";
+                : "var(--color-danger)";
 
             const card = (
               <div
@@ -64,7 +64,7 @@ export function ServicesWidget() {
                   flex flex-col items-stretch aspect-square rounded-xl p-2 transition-all max-w-[115px] max-h-[115px]
                   ${isActive ? "bg-accent/30 hover:bg-accent/50" : "bg-muted/10"}
                   ${isFailed ? "ring-1 ring-danger/30" : ""}
-                  ${!isActive ? "opacity-45 grayscale" : ""}
+                  ${!isActive ? "opacity-55 grayscale" : ""}
                 `}
               >
                 {/* Name above icon */}
