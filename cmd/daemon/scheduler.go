@@ -9,6 +9,7 @@ import (
 	"time"
 
 	logging "github.com/ogglord/homelab-logging"
+	"github.com/ogglord/homelab-daemon/internal/notifier"
 	"github.com/robfig/cron/v3"
 )
 
@@ -33,15 +34,17 @@ type Scheduler struct {
 	ctx     context.Context
 	cfg     *Config
 	state   *State
+	notify  *notifier.Notifier
 	entries map[string]cron.EntryID
 	lastRun map[string]time.Time // unit → last run start (survives cron Prev resets on restart)
 }
 
-func NewScheduler(ctx context.Context, cfg *Config, state *State) *Scheduler {
+func NewScheduler(ctx context.Context, cfg *Config, state *State, notify *notifier.Notifier) *Scheduler {
 	s := &Scheduler{
 		ctx:     ctx,
 		cfg:     cfg,
 		state:   state,
+		notify:  notify,
 		entries: make(map[string]cron.EntryID),
 		lastRun: make(map[string]time.Time),
 	}
@@ -171,6 +174,12 @@ func (s *Scheduler) RunBackup(unit string) error {
 		log.Error("backup job failed", "error", err)
 		if hcURL != "" {
 			pingHealthcheck(hcURL + "/fail")
+		}
+		if s.notify.Enabled() {
+			subj, body := s.notify.BackupFailed(unit, err)
+			if err2 := s.notify.Send(subj, body); err2 != nil {
+				log.Warn("failed to send backup failure notification", "error", err2)
+			}
 		}
 		return err
 	}

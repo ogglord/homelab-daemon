@@ -16,6 +16,7 @@ import (
 
 	"github.com/ogglord/homelab-daemon/internal/cmdrunner"
 	"github.com/ogglord/homelab-daemon/internal/collector"
+	"github.com/ogglord/homelab-daemon/internal/notifier"
 	"github.com/ogglord/homelab-daemon/internal/storage/bcachefs"
 	"github.com/ogglord/homelab-daemon/internal/updates"
 	"github.com/ogglord/homelab-daemon/internal/vms"
@@ -89,7 +90,7 @@ func computeBlockedReason(svc Service, activeState string, failureCount int, bac
 //	PATCH /api/backups/:unit  — update configuration for one backup
 var apiLog = logging.Logger("api")
 
-func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, cfgPath string, breaker *CircuitBreaker, scheduler *Scheduler, updatesMod *updates.Module, col *collector.Collector) error {
+func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, cfgPath string, breaker *CircuitBreaker, scheduler *Scheduler, updatesMod *updates.Module, col *collector.Collector, notify *notifier.Notifier) error {
 	// Remove stale socket.
 	_ = os.Remove(sockPath)
 

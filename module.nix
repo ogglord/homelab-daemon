@@ -72,6 +72,16 @@ services:
     + lib.optionalString (cfg.managedBackups != {}) (
         "\nbackups:\n\n"
         + lib.concatStrings (lib.mapAttrsToList yamlBackupEntry cfg.managedBackups)
+      )
+    + lib.optionalString (cfg.notify.smtp.host != "") (
+        "\nnotify:\n"
+        + "  smtp:\n"
+        + "    host: ${lib.escapeNixString cfg.notify.smtp.host}\n"
+        + "    port: ${toString cfg.notify.smtp.port}\n"
+        + "    username: ${lib.escapeNixString cfg.notify.smtp.username}\n"
+        + "    password: ${lib.escapeNixString cfg.notify.smtp.password}\n"
+        + "  from: ${lib.escapeNixString cfg.notify.from}\n"
+        + "  to: ${lib.escapeNixString cfg.notify.to}\n"
       );
 
 in
@@ -117,6 +127,50 @@ in
     stateDir = lib.mkOption {
       type = lib.types.str;
       default = "/var/lib/homelab-daemon";
+    };
+
+    notify = lib.mkOption {
+      type = lib.types.submodule {
+        options = {
+          smtp = {
+            host = lib.mkOption {
+              type = lib.types.str;
+              default = "";
+              description = "SMTP server hostname for email notifications.";
+            };
+            port = lib.mkOption {
+              type = lib.types.port;
+              default = 587;
+              description = "SMTP server port.";
+            };
+            username = lib.mkOption {
+              type = lib.types.str;
+              default = "";
+              description = "SMTP username.";
+            };
+            password = lib.mkOption {
+              type = lib.types.str;
+              default = "";
+              description = "SMTP password or app token.";
+            };
+          };
+          from = lib.mkOption {
+            type = lib.types.str;
+            default = "homelab-daemon@${config.networking.hostName}";
+            description = "From address for notification emails.";
+          };
+          to = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = "Recipient address for notification emails.";
+          };
+        };
+      };
+      default = {};
+      description = ''
+        SMTP notification settings. When configured, the daemon sends email
+        alerts for failed backup jobs, service failures, and daemon crashes.
+      '';
     };
 
     managedServices = lib.mkOption {

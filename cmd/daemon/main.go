@@ -15,6 +15,7 @@ import (
 
 	"github.com/ogglord/homelab-daemon/internal/cmdrunner"
 	"github.com/ogglord/homelab-daemon/internal/collector"
+	"github.com/ogglord/homelab-daemon/internal/notifier"
 	"github.com/ogglord/homelab-daemon/internal/storage/bcachefs"
 	"github.com/ogglord/homelab-daemon/internal/updates"
 	"golang.org/x/sync/errgroup"
@@ -28,6 +29,12 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "merge-config" {
 		handleMergeConfig()
 		os.Exit(0)
+	}
+
+	// ── Hostname (for notification subjects) ────────────────────────────
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "homelab"
 	}
 
 	configPath := flag.String("config", "/cache/appdata/homelab/services.yaml", "path to services.yaml")
@@ -116,8 +123,49 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
 
+	// ── Notifier (SMTP alerts) ───────────────────────────────────────
+	notify := notifier.New(
+		notifier.SMTPConfig{
+			Host:     cfg.Notify.SMTP.Host,
+			Port:     cfg.Notify.SMTP.Port,
+			Username: cfg.Notify.SMTP.Username,
+			Password: cfg.Notify.SMTP.Password,
+		},
+		cfg.Notify.From,
+		cfg.Notify.To,
+		hostname,
+	)
+	if notify.Enabled() {
+		mainLog.Info("notifier configured", "host", cfg.Notify.SMTP.Host, "to", cfg.Notify.To)
+	} else {
+		mainLog.Info("notifier not configured (no SMTP host)")
+	}
+
+	// ── Daemon crash detection ──────────────────────────────────────
+	// A marker file is written on clean shutdown and removed on crash.
+	// If it exists at startup, the previous instance did not shut down cleanly.
+	crashMarker := stateDir + "/.clean-shutdown"
+	if _, err := os.Stat(crashMarker); err == nil {
+		// Marker exists — previous shutdown was clean, remove it.
+		os.Remove(crashMarker)
+	} else if os.IsNotExist(err) {
+		// No marker — possible crash. Only notify if state file exists
+		// (meaning the daemon has run at least once before).
+		if _, err := os.Stat(stateDir + "/state.json"); err == nil && notify.Enabled() {
+			subj, body := notify.DaemonCrash()
+			if err := notify.Send(subj, body); err != nil {
+				mainLog.Warn("failed to send crash notification", "error", err)
+			}
+		}
+	}
+
+	// Write the clean-shutdown marker now; it gets removed in the defer
+	// below. If we crash before the defer runs, the marker stays gone and
+	// the next startup detects the crash.
+	os.WriteFile(crashMarker, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o600)
+
 	// Scheduler for cron backups
-	scheduler := NewScheduler(ctx, cfg, state)
+	scheduler := NewScheduler(ctx, cfg, state, notify)
 
 	// Container updates checker background worker
 	updatesMod := updates.New(stateDir)
@@ -158,7 +206,7 @@ func main() {
 	// consumer (homelab-dash, the `homelab` CLI, the module docs).
 	sockPath := "/run/homelab-daemon/daemon.sock"
 	g.Go(func() error {
-		if err := serveAPI(gctx, sockPath, cfg, state, *configPath, breaker, scheduler, updatesMod, col); err != nil {
+		if err := serveAPI(gctx, sockPath, cfg, state, *configPath, breaker, scheduler, updatesMod, col, notify); err != nil {
 			mainLog.Error("API server stopped", "error", err)
 			return err
 		}
@@ -229,7 +277,7 @@ func main() {
 
 	// Monitor loop: restart services per policy with circuit breaker backoff.
 	g.Go(func() error {
-		monitor(gctx, cfg, state, breaker)
+		monitor(gctx, cfg, state, breaker, notify)
 		return nil
 	})
 

@@ -17,9 +17,25 @@ const CurrentSchemaVersion = 1
 // Config is the top-level structure of services.yaml.
 type Config struct {
 	Version  int           `yaml:"version"`
+	Notify   NotifyConfig  `yaml:"notify"`
 	Storage  StorageConfig `yaml:"storage"`
 	Services []Service     `yaml:"services"`
 	Backups  []Backup      `yaml:"backups"`
+}
+
+// NotifyConfig holds SMTP alert configuration.
+type NotifyConfig struct {
+	SMTP   SMTPConfig `yaml:"smtp"`
+	From   string     `yaml:"from"`
+	To     string     `yaml:"to"`
+}
+
+// SMTPConfig for sending email alerts.
+type SMTPConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 // StorageConfig holds user-managed storage settings.

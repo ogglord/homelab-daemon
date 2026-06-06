@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/ogglord/homelab-daemon/internal/notifier"
 	"time"
 
 	"github.com/ogglord/homelab-daemon/internal/cmdrunner"
@@ -360,7 +362,9 @@ func boot(ctx context.Context, cfg *Config, state *State) {
 
 // monitor polls every 5 seconds and restarts services per their restart policy.
 // It uses a CircuitBreaker to apply exponential backoff after consecutive failures.
-func monitor(ctx context.Context, cfg *Config, state *State, breaker *CircuitBreaker) {
+func monitor(ctx context.Context, cfg *Config, state *State, breaker *CircuitBreaker, notify *notifier.Notifier) {
+	prevFailures := make(map[string]int)
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -369,6 +373,23 @@ func monitor(ctx context.Context, cfg *Config, state *State, breaker *CircuitBre
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// ── Service failure notification ──────────────────────────
+			for _, svc := range cfg.Services {
+				if !svc.Enabled {
+					continue
+				}
+				consecutive, _ := breaker.State(svc.Unit)
+				if consecutive > prevFailures[svc.Unit] && consecutive > 0 && notify.Enabled() {
+					name := strings.TrimPrefix(svc.Unit, "podman-")
+					name = strings.TrimSuffix(name, ".service")
+					subj, body := notify.ServiceFailed(svc.Unit, name, fmt.Sprintf("%d consecutive failures", consecutive))
+					if err := notify.SendWithCooldown("service-failure", time.Hour, subj, body); err != nil {
+						monitorLog.Warn("failed to send service failure notification", "unit", svc.Unit, "error", err)
+					}
+				}
+				prevFailures[svc.Unit] = consecutive
+			}
+
 			var unitsToCheck []string
 			for _, svc := range cfg.Services {
 				if !svc.Enabled || svc.Restart == "" || svc.Restart == "no" {
