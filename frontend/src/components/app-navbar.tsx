@@ -22,10 +22,9 @@ import { PollIntervalSelector } from "@/components/PollIntervalSelector";
 
 type AppNavbarProps = NavbarProps & {
   navItems: NavItem[];
-  hasStreaming?: boolean;
 };
 
-export default function AppNavbar({ navItems, hasStreaming = false, ...props }: AppNavbarProps) {
+export default function AppNavbar({ navItems, ...props }: AppNavbarProps) {
   const location = useLocation();
 
   function isCurrent(item: NavItem): boolean {
@@ -113,56 +112,6 @@ export default function AppNavbar({ navItems, hasStreaming = false, ...props }: 
             const external = item.path.startsWith("http://") || item.path.startsWith("https://");
             const openBlank = external && item.target === "_blank";
             const to = external && !openBlank ? `/external/${encodeURIComponent(item.path)}` : item.path;
-
-            // ── Pill items (Agent) ──
-            if (item.pill) {
-              return (
-                <div key={item.path} className="flex items-center gap-x-0">
-                  <NavbarItem
-                    isCurrent={isCurrent(item)}
-                    onPress={() => hardNav(item.path!, item.target)}
-                  >
-                    <span
-                      className={`inline-flex items-center gap-x-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                        isCurrent(item)
-                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                          : "bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950/20 dark:text-blue-400 dark:hover:bg-blue-900/30"
-                      } ${hasStreaming ? "ring-1 ring-red-400/50" : ""}`}
-                    >
-                      {item.icon === "robot" && (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="size-4"
-                        >
-                          <path d="M12 8V4H8" />
-                          <rect width="16" height="12" x="4" y="8" rx="2" />
-                          <path d="M2 14h2" />
-                          <path d="M20 14h2" />
-                          <path d="M15 13v1" />
-                          <path d="M9 13v1" />
-                        </svg>
-                      )}
-                      {item.label}
-                      {hasStreaming && (
-                        <span className="relative flex size-2 ml-0.5">
-                          <span className="absolute inline-flex size-full animate-ping rounded-full bg-red-400 opacity-75" />
-                          <span className="relative inline-flex size-2 rounded-full bg-red-500" />
-                        </span>
-                      )}
-                    </span>
-                  </NavbarItem>
-                  {item.divider_after && (
-                    <div className="mx-1.5 h-[18px] w-px bg-border" />
-                  )}
-                </div>
-              );
-            }
 
             // ── Plain nav link — full page reload ──
             return (

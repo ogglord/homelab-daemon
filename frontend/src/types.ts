@@ -39,9 +39,6 @@ export interface NavItem {
   target?: string | null;
   is_active?: boolean;
   children?: NavItem[];
-  pill?: boolean;
-  icon?: string;
-  divider_after?: boolean;
 }
 export interface NavGroup {
   parent: string;

@@ -10,14 +10,6 @@ import type { NavItem } from "@/types";
 
 export const navItems: NavItem[] = [
   {
-    path: "https://sessions.cignl.cc",
-    label: "Agent",
-    pill: true,
-    icon: "robot",
-    target: "_blank",
-    divider_after: true,
-  },
-  {
     path: "/",
     label: "Overview",
   },
