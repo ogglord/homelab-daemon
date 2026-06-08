@@ -1,75 +1,42 @@
-import { ExternalLink } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
 import type { PortMapping } from "@/types";
 
-const MAX_INLINE = 3;
+const MAX_VISIBLE = 3;
 
-interface PortChipsProps {
-  ports: PortMapping[];
-  homepageUrl?: string;
-}
+export function PortChips({ ports }: { ports: PortMapping[] }) {
+  if (!ports || ports.length === 0) return null;
 
-export function PortChips({ ports, homepageUrl }: PortChipsProps) {
-  const hasUrl = !!homepageUrl;
-  const hasPorts = ports.length > 0;
-
-  if (!hasUrl && !hasPorts) return null;
-
-  const inline = ports.slice(0, MAX_INLINE);
-  const overflow = ports.length - MAX_INLINE;
-
-  let hostname = "";
-  if (hasUrl) {
-    try {
-      hostname = new URL(homepageUrl!).hostname;
-    } catch {
-      hostname = homepageUrl!;
-    }
-  }
+  const visible = ports.slice(0, MAX_VISIBLE);
+  const overflow = ports.length - MAX_VISIBLE;
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      {hasUrl && (
-        <a
-          href={homepageUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-primary hover:underline max-w-[10rem] truncate"
-          title={homepageUrl}
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {visible.map((p, i) => (
+        <span
+          key={i}
+          className="inline-block rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-fg leading-none"
         >
-          <ExternalLink className="size-3 shrink-0" />
-          <span className="truncate">{hostname}</span>
-        </a>
-      )}
-      {inline.map((p, i) => (
-        <Badge key={i} intent="outline" isCircle={false} className="font-mono text-[10px] px-1 py-0">
-          {p.host_port !== p.container_port
-            ? `${p.host_port}→${p.container_port}/${p.protocol}`
-            : `${p.host_port}/${p.protocol}`}
-        </Badge>
+          {p.container_port}/{p.protocol}
+        </span>
       ))}
       {overflow > 0 && (
         <Tooltip>
           <TooltipTrigger>
-            <Badge intent="secondary" isCircle={false} className="cursor-default text-[10px] px-1 py-0">
-              +{overflow} more
-            </Badge>
+            <span className="inline-block rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-fg leading-none cursor-default">
+              +{overflow}
+            </span>
           </TooltipTrigger>
           <TooltipContent>
-            <div className="flex flex-col gap-0.5 font-mono text-xs">
-              {ports.slice(MAX_INLINE).map((p, i) => (
-                <span key={i}>
-                  {p.host_port !== p.container_port
-                    ? `${p.host_port}→${p.container_port}/${p.protocol}`
-                    : `${p.host_port}/${p.protocol}`}
-                  {p.host_ip ? ` (${p.host_ip})` : ""}
+            <div className="flex flex-col gap-0.5">
+              {ports.slice(MAX_VISIBLE).map((p, i) => (
+                <span key={i} className="font-mono text-xs">
+                  {p.container_port}/{p.protocol}{p.host_ip ? ` → ${p.host_ip}:${p.host_port}` : ` → ${p.host_port}`}
                 </span>
               ))}
             </div>
           </TooltipContent>
         </Tooltip>
       )}
-    </div>
+    </span>
   );
 }

@@ -440,13 +440,9 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 		// Apply changes
 		if payload.Enabled != nil {
 			cfg.Services[idx].Enabled = *payload.Enabled
-			// Fix D: re-enabling a service must clear the sticky user-stopped flag
-			// so the monitor loop will restart it. Without this the monitor sees
-			// IsUserStopped==true and silently skips the unit forever.
-			// Fix E: also reset the circuit breaker so any backed-off state from
-			// before the service was disabled doesn't block the first restart.
+			// When re-enabling a service, clear the user-stopped flag and reset
+			// the circuit breaker so the monitor loop restarts it promptly.
 			if *payload.Enabled {
-				unit := cfg.Services[idx].Unit
 				state.SetUserStopped(unit, false)
 				breaker.Reset(unit)
 			}
@@ -1047,7 +1043,7 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 		for _, svc := range cfg.Services {
 			units = append(units, svc.Unit)
 		}
-		unitProps := fetchSystemdProps(units, "Id", "ActiveState", "SubState", "Description")
+		unitProps := fetchSystemdProps(units, "Id", "ActiveState", "SubState", "Description", "ActiveEnterTimestamp")
 		updates := updatesMod.GetUpdates()
 		mdata := updatesMod.GetMetadata()
 
@@ -1064,11 +1060,13 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 			desc := props["Description"]
 
 			image := ""
+			var portMappings []api.PortMapping
 			isDocker := strings.HasPrefix(u, "podman-")
 			if isDocker {
 				if entry, ok := mdata[name]; ok {
 					desc = entry.Description
 					image = entry.Image
+					portMappings = toAPIPortMappings(entry.Ports)
 				}
 			}
 
@@ -1083,6 +1081,13 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 			backoffSecs := 0
 			if !backoffUntil.IsZero() && time.Now().Before(backoffUntil) {
 				backoffSecs = int(time.Until(backoffUntil).Seconds())
+			}
+
+			startedAt := ""
+			if activeState == "active" {
+				if t := parseSystemdTimestamp(props["ActiveEnterTimestamp"]); !t.IsZero() {
+					startedAt = t.UTC().Format(time.RFC3339)
+				}
 			}
 
 			out = append(out, api.ServiceInfo{
@@ -1106,11 +1111,12 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 				DaemonEnabled:   svc.Enabled,
 				FailureCount:    consecutive,
 				BackoffSeconds:  backoffSecs,
-				BlockedReason:   computeBlockedReason(svc, or(activeState, "inactive"), consecutive, backoffUntil, state.IsUserStopped(u)),
+				BlockedReason:   computeBlockedReason(svc, activeState, consecutive, backoffUntil, state.IsUserStopped(u)),
 				RequiresMounts:  svc.RequiresMounts,
 				IconURL:         svc.IconURL,
 				HomepageURL:     svc.HomepageURL,
-				PortMappings:    mdata[name].Ports,
+				StartedAt:       startedAt,
+				PortMappings:    portMappings,
 			})
 		}
 
@@ -1207,7 +1213,7 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 		for _, svc := range cfg.Services {
 			units = append(units, svc.Unit)
 		}
-		unitProps := fetchSystemdProps(units, "Id", "ActiveState", "SubState", "Description")
+		unitProps := fetchSystemdProps(units, "Id", "ActiveState", "SubState", "Description", "ActiveEnterTimestamp")
 		updates := updatesMod.GetUpdates()
 		mdata := updatesMod.GetMetadata()
 
@@ -1224,11 +1230,13 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 			desc := props["Description"]
 
 			image := ""
+			var portMappings []api.PortMapping
 			isDocker := strings.HasPrefix(u, "podman-")
 			if isDocker {
 				if entry, ok := mdata[name]; ok {
 					desc = entry.Description
 					image = entry.Image
+					portMappings = toAPIPortMappings(entry.Ports)
 				}
 			}
 
@@ -1243,6 +1251,13 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 			backoffSecs := 0
 			if !backoffUntil.IsZero() && time.Now().Before(backoffUntil) {
 				backoffSecs = int(time.Until(backoffUntil).Seconds())
+			}
+
+			startedAt := ""
+			if activeState == "active" {
+				if t := parseSystemdTimestamp(props["ActiveEnterTimestamp"]); !t.IsZero() {
+					startedAt = t.UTC().Format(time.RFC3339)
+				}
 			}
 
 			services = append(services, api.ServiceInfo{
@@ -1270,7 +1285,8 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 				RequiresMounts:  svc.RequiresMounts,
 				IconURL:         svc.IconURL,
 				HomepageURL:     svc.HomepageURL,
-				PortMappings:    mdata[name].Ports,
+				StartedAt:       startedAt,
+				PortMappings:    portMappings,
 			})
 		}
 
@@ -1486,6 +1502,37 @@ func or(v, fallback string) string {
 		return fallback
 	}
 	return v
+}
+
+// parseSystemdTimestamp parses a systemd property timestamp string of the form
+// "Mon 2006-01-02 15:04:05 MST" into a time.Time. Returns zero on failure.
+func parseSystemdTimestamp(s string) time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "n/a" {
+		return time.Time{}
+	}
+	t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// toAPIPortMappings converts updates.PortBinding slice to api.PortMapping slice.
+func toAPIPortMappings(in []updates.PortBinding) []api.PortMapping {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]api.PortMapping, 0, len(in))
+	for _, p := range in {
+		out = append(out, api.PortMapping{
+			ContainerPort: p.ContainerPort,
+			HostPort:      p.HostPort,
+			Protocol:      p.Protocol,
+			HostIP:        p.HostIP,
+		})
+	}
+	return out
 }
 
 // fmtName converts a kebab/snake-case name to title case.

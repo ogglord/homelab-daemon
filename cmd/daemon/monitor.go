@@ -378,6 +378,15 @@ func boot(ctx context.Context, cfg *Config, state *State) {
 			}
 		}
 
+		// Re-verify each dependency is still active immediately before starting —
+		// a dependency could crash in the window between waitActive and here.
+		for _, dep := range svc.DependsOn {
+			if !isActive(dep) {
+				log.Error("dependency went inactive before start, skipping", "dep", dep)
+				goto next
+			}
+		}
+
 		log.Info("starting")
 		if err := startUnit(svc.Unit); err != nil {
 			log.Error("start failed", "error", err)
@@ -509,6 +518,16 @@ func exitedWithFailure(unit string) bool {
 // recording success or failure in the circuit breaker.
 func restart(ctx context.Context, svc Service, breaker *CircuitBreaker) {
 	log := monitorLog.With("unit", svc.Unit, "policy", svc.Restart)
+
+	// Check depends_on before waiting the restart delay — if a dependency is
+	// still down there is no point starting the dependent.
+	for _, dep := range svc.DependsOn {
+		if !isActive(dep) {
+			log.Info("restart deferred — dependency inactive", "dep", dep)
+			return
+		}
+	}
+
 	log.Info("service inactive, scheduling restart", "delay_s", svc.RestartDelay)
 
 	if svc.RestartDelay > 0 {
