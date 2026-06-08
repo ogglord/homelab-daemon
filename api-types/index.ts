@@ -177,7 +177,7 @@ export interface PortMapping {
   container_port: number /* int */;
   host_port: number /* int */;
   protocol: string; // "tcp" | "udp"
-  host_ip?: string; // omit if "0.0.0.0" or ""
+  host_ip?: string; // omitted when "0.0.0.0" or ""
 }
 /**
  * Service is the static configuration for one managed systemd unit.
@@ -269,7 +269,8 @@ export interface ServiceInfo {
   requires_mount: string[]; // mountpoints that must be present
   icon_url?: string;
   homepage_url?: string;
-  port_mappings?: PortMapping[];
+  started_at?: string; // RFC3339; empty when inactive
+  port_mappings?: PortMapping[]; // container port bindings
 }
 
 //////////

@@ -7,7 +7,7 @@ type PortMapping struct {
 	ContainerPort int    `json:"container_port"`
 	HostPort      int    `json:"host_port"`
 	Protocol      string `json:"protocol"`          // "tcp" | "udp"
-	HostIP        string `json:"host_ip,omitempty"` // omit if "0.0.0.0" or ""
+	HostIP        string `json:"host_ip,omitempty"` // omitted when "0.0.0.0" or ""
 }
 
 // Service is the static configuration for one managed systemd unit.
@@ -94,5 +94,6 @@ type ServiceInfo struct {
 	RequiresMounts  []string `json:"requires_mount"`  // mountpoints that must be present
 	IconURL         string        `json:"icon_url,omitempty"`
 	HomepageURL     string        `json:"homepage_url,omitempty"`
-	PortMappings    []PortMapping `json:"port_mappings,omitempty"`
+	StartedAt       string        `json:"started_at,omitempty"`    // RFC3339; empty when inactive
+	PortMappings    []PortMapping `json:"port_mappings,omitempty"` // container port bindings
 }

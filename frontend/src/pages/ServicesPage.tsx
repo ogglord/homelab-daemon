@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ScrollText, LayoutGrid, List } from "lucide-react";
-import { PageShell, useTable, RowActions, useRowContextMenu } from "@/components/data-table";
-import { Button } from "@/components/ui/button";
+import { ExternalLink } from "lucide-react";
+import { PageShell, useTable, useRowContextMenu } from "@/components/data-table";
+import { Menu, MenuContent, MenuTrigger } from "@/components/ui/menu";
 import {
   Table, TableBody, TableCell, TableColumn, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -12,13 +13,12 @@ import { useOverview } from "@/hooks/use-overview";
 import type { ServiceInfo, PortMapping } from "@/types";
 import { StatusDot } from "@/components/ui/status-dot";
 import { StateBadge, fmtBackoff } from "./ServicesPage/StateBadge";
-import { LogsDialog } from "./ServicesPage/LogsDialog";
+import { PortChips } from "./ServicesPage/PortChips";
 import { PullDialog } from "./ServicesPage/PullDialog";
 import { ServiceConfigSheet, type ServiceConfigDraft } from "./ServicesPage/ServiceConfigSheet";
 import { ConfirmDialogs } from "./ServicesPage/ConfirmDialogs";
 import { BulkControlBar } from "./ServicesPage/BulkControlBar";
-import { PortChips } from "./ServicesPage/PortChips";
-import { ServiceCard, type ServiceCardRow } from "./ServicesPage/ServiceCard";
+import { ServiceCardsGrid } from "./ServicesPage/ServiceCardsGrid";
 import {
   renderMenuItems as renderMenuItemsHelper,
   renderContextMenuItems as renderContextMenuItemsHelper,
@@ -26,8 +26,7 @@ import {
   type ServiceActionItem,
 } from "./ServicesPage/ServiceActionsMenu";
 
-const VIEW_STORAGE_KEY = "homelab-services-view";
-type ViewMode = "normal" | "expert";
+const FALLBACK_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Crect x='2' y='2' width='20' height='8' rx='2'/%3E%3Crect x='2' y='14' width='20' height='8' rx='2'/%3E%3C/svg%3E";
 
 // Row-level view model — flat fields for sorting/filtering.
 interface ServiceRow extends Record<string, unknown> {
@@ -56,6 +55,7 @@ interface ServiceRow extends Record<string, unknown> {
   icon_url: string;
   homepage_url: string;
   port_mappings: PortMapping[];
+  started_at: string;
 }
 
 function toRow(svc: ServiceInfo): ServiceRow {
@@ -85,33 +85,53 @@ function toRow(svc: ServiceInfo): ServiceRow {
     icon_url: svc.icon_url || "",
     homepage_url: svc.homepage_url || "",
     port_mappings: svc.port_mappings || [],
+    started_at: svc.started_at || "",
   };
 }
 
+function fmtUptime(startedAt: string): string {
+  if (!startedAt) return "—";
+  const diff = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+  if (diff < 60) return "< 1m";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) {
+    const h = Math.floor(diff / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  const d = Math.floor(diff / 86400);
+  const h = Math.floor((diff % 86400) / 3600);
+  return h > 0 ? `${d}d ${h}h` : `${d}d`;
+}
+
+type ViewMode = "table" | "cards";
+
+function loadViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem("homelab-services-view");
+    if (v === "cards" || v === "table") return v;
+  } catch {}
+  return "table";
+}
+
 export default function ServicesPage() {
+  const navigate = useNavigate();
   const [services, setServices] = useState<ServiceInfo[] | null>(null);
-  const [logs, setLogs] = useState({ open: false, unit: "", name: "", content: "" });
   const [pull, setPull] = useState({ open: false, unit: "", name: "", image: "", autoRestart: false });
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ unit: string; action: string; label: string } | null>(null);
   const [confirmBulkStop, setConfirmBulkStop] = useState(false);
   const [bulkLoading, setBulkLoading] = useState<"stop" | "start" | null>(null);
   const [configDrawer, setConfigDrawer] = useState<ServiceConfigDraft | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    try {
-      return (localStorage.getItem(VIEW_STORAGE_KEY) as ViewMode) ?? "expert";
-    } catch {
-      return "expert";
-    }
-  });
+  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
 
-  const toggleViewMode = useCallback(() => {
-    setViewMode((prev) => {
-      const next = prev === "expert" ? "normal" : "expert";
-      try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch { /* ignore */ }
+  function toggleViewMode() {
+    setViewMode((v) => {
+      const next = v === "table" ? "cards" : "table";
+      try { localStorage.setItem("homelab-services-view", next); } catch {}
       return next;
     });
-  }, []);
+  }
 
   // Sort & filter (from shared hook)
   const rows = useMemo(() => services?.map(toRow) ?? null, [services]);
@@ -291,18 +311,6 @@ export default function ServicesPage() {
     }
   }
 
-  async function showLogs(unit: string) {
-    const name = unit.replace(/^podman-/, "").replace(/\.service$/, "");
-    setLogs({ open: true, unit, name, content: "Loading logs..." });
-    try {
-      const resp = await fetch(`/api/services/${unit}/logs`);
-      const data = await resp.json();
-      setLogs((prev) => ({ ...prev, content: data.logs ?? "No logs available" }));
-    } catch {
-      setLogs((prev) => ({ ...prev, content: "Failed to load logs" }));
-    }
-  }
-
   const triggerUpdate = useCallback((unit: string) => {
     const svc = services?.find((s) => s.unit_name === unit);
     if (!svc) return;
@@ -317,7 +325,10 @@ export default function ServicesPage() {
       onRestart: (unit) => doAction(unit, "restart"),
       onStart: (unit) => doAction(unit, "start"),
       onEnableAutoStart: (unit) => toggleAutoStart(unit, true),
-      onShowLogs: showLogs,
+      onShowLogs: (unit) => {
+        const name = unit.replace(/^podman-/, "").replace(/\.service$/, "");
+        navigate(`/logs?service=${encodeURIComponent(name)}`);
+      },
       onConfigure: (item) => setConfigDrawer({
         open: true,
         unit: item.unit_name,
@@ -334,25 +345,23 @@ export default function ServicesPage() {
       afterAction,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [navigate],
   );
-
-  const renderMenuItems = (item: ServiceActionItem) =>
-    renderMenuItemsHelper(item, buildMenuCallbacks());
 
   const renderContextMenuItems = (item: ServiceActionItem) =>
     renderContextMenuItemsHelper(item, buildMenuCallbacks());
 
-  // ── Expert table (Unraid-style) ─────────────────────────────────────────
-  function ExpertTableContent({ sorted: items, sortDescriptor: sd, onSortChange, triggerUpdate: triggerUpdateFn, toggleAutoStart: toggleAutoStartFn, renderMenuItems: renderItems }: {
+  // Inner component rendered inside PageShell so useRowContextMenu
+  // has access to the TableContext provider.
+  function ServicesTableContent({ sorted: items, sortDescriptor: sd, onSortChange, triggerUpdate: triggerUpdateFn, toggleAutoStart: toggleAutoStartFn }: {
     sorted: ServiceRow[];
     sortDescriptor: any;
     onSortChange: (d: any) => void;
     triggerUpdate: (unit: string) => void;
     toggleAutoStart: (unit: string, enabled: boolean) => void;
-    renderMenuItems: (item: ServiceActionItem) => React.ReactNode;
   }) {
     const onRowCtx = useRowContextMenu<ServiceRow>();
+    const menuCallbacks = buildMenuCallbacks();
 
     return (
       <Table
@@ -361,17 +370,17 @@ export default function ServicesPage() {
         onSortChange={(d: any) => onSortChange({ column: String(d.column), direction: d.direction as "ascending" | "descending" })}
       >
         <TableHeader columns={[
-          { id: "icon",     name: "",            className: "w-11" },
-          { id: "name",     name: "Name",        isRowHeader: true, className: "w-40 min-w-[8rem]" },
-          { id: "status",   name: "Status",      className: "w-44 min-w-[11rem]" },
-          { id: "web",      name: "Web / Ports", className: "hidden md:table-cell" },
-          { id: "autostart",name: "AutoStart",   className: "w-24" },
-          { id: "actions",  name: "",            className: "w-14" },
+          { id: "icon",      name: "",           className: "w-11" },
+          { id: "name",      name: "Name",       isRowHeader: true, className: "w-40 min-w-[8rem]" },
+          { id: "status",    name: "Status",     className: "w-44 min-w-[11rem]" },
+          { id: "uptime",    name: "Uptime",     className: "w-24 hidden sm:table-cell" },
+          { id: "webports",  name: "Web / Ports", className: "hidden md:table-cell" },
+          { id: "autostart", name: "AutoStart",  className: "w-24" },
         ] as Array<{ id: string; name: string; isRowHeader?: boolean; className?: string }>}>
           {(column) => (
             <TableColumn
               isRowHeader={column.id === "name"}
-              allowsSorting={column.id === "name" || column.id === "status"}
+              allowsSorting={column.id === "name" || column.id === "status" || column.id === "uptime"}
               className={column.className ?? ""}
             >
               {column.name}
@@ -379,184 +388,116 @@ export default function ServicesPage() {
           )}
         </TableHeader>
         <TableBody items={items}>
-          {(item: ServiceRow) => {
-            const isRunning = item.state === "active" || item.state === "activating";
-            return (
-              <TableRow onContextMenu={onRowCtx(item)}>
-                {/* Icon column */}
-                <TableCell>
-                  <Tooltip>
-                    <TooltipTrigger>
-                      {item.icon_url ? (
-                        <img
-                          src={item.icon_url}
-                          alt={item.name}
-                          className={`size-8 rounded object-contain transition-all ${!isRunning ? "opacity-40 grayscale" : ""}`}
-                        />
-                      ) : (
-                        <div className={`size-8 rounded bg-muted flex items-center justify-center text-xs font-bold text-muted-fg ${!isRunning ? "opacity-40" : ""}`}>
-                          {item.name[0]?.toUpperCase() ?? "?"}
-                        </div>
-                      )}
-                    </TooltipTrigger>
-                    <TooltipContent>{item.description}</TooltipContent>
-                  </Tooltip>
-                </TableCell>
+          {(item: ServiceRow) => (
+            <TableRow onContextMenu={onRowCtx(item)}>
+              {/* Icon — left-click opens action menu */}
+              <TableCell className="py-1.5">
+                <Menu>
+                  <MenuTrigger
+                    aria-label={`Actions for ${item.name}`}
+                    className="flex items-center justify-center rounded-md p-0.5 outline-hidden hover:ring-1 hover:ring-border focus-visible:ring-2 focus-visible:ring-primary transition-all"
+                  >
+                    <img
+                      src={item.icon_url || FALLBACK_ICON}
+                      alt={item.name}
+                      className={`size-8 object-contain rounded ${item.state !== "active" ? "grayscale opacity-50" : ""}`}
+                      loading="lazy"
+                      onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_ICON; }}
+                    />
+                  </MenuTrigger>
+                  <MenuContent placement="bottom start" className="min-w-40">
+                    {renderMenuItemsHelper(item, menuCallbacks)}
+                  </MenuContent>
+                </Menu>
+              </TableCell>
 
-                {/* Name column */}
-                <TableCell className="text-sm">
-                  <span className="inline-flex items-center gap-1.5">
-                    {item.name}
-                    {item.update_available && (
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <StatusDot
-                            intent="warning"
-                            className="cursor-pointer"
-                            onClick={() => triggerUpdateFn(item.unit_name)}
-                          />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          Update available — click to pull {item.image ?? item.name} and restart.
-                          {item.remote_version && ` Remote: ${item.remote_version}.`}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </span>
-                </TableCell>
-
-                {/* Status column */}
-                <TableCell>
-                  <StateBadge
-                    state={item.state}
-                    subState={item.subState}
-                    userStopped={item.user_stopped}
-                    failureCount={item.failure_count}
-                    backoffSeconds={item.backoff_seconds}
-                    blockedReason={item.blocked_reason}
-                  />
-                </TableCell>
-
-                {/* Web / Ports column */}
-                <TableCell className="hidden md:table-cell">
-                  <PortChips
-                    ports={item.port_mappings}
-                    homepageUrl={item.homepage_url || undefined}
-                  />
-                </TableCell>
-
-                {/* AutoStart column */}
-                <TableCell>
-                  <Switch
-                    isSelected={item.daemon_enabled}
-                    onChange={(selected: boolean) => toggleAutoStartFn(item.unit_name, selected)}
-                    aria-label="AutoStart toggle"
-                  />
-                </TableCell>
-
-                {/* Actions column */}
-                <TableCell>
-                  <div className="flex items-center gap-0.5">
+              {/* Name + update dot */}
+              <TableCell className="text-sm">
+                <span className="inline-flex items-center gap-1.5">
+                  {item.name}
+                  {item.update_available && (
                     <Tooltip>
                       <TooltipTrigger>
-                        <Button
-                          intent="plain"
-                          size="sq-xs"
-                          aria-label="View logs"
-                          onPress={() => showLogs(item.unit_name)}
-                        >
-                          <ScrollText className="size-3.5" />
-                        </Button>
+                        <StatusDot
+                          intent="warning"
+                          className="cursor-pointer"
+                          onClick={() => triggerUpdateFn(item.unit_name)}
+                        />
                       </TooltipTrigger>
-                      <TooltipContent>Logs</TooltipContent>
+                      <TooltipContent>
+                        Update available — click to pull {item.image || item.name} and restart.
+                        {item.remote_version && ` Remote: ${item.remote_version}.`}
+                      </TooltipContent>
                     </Tooltip>
-                    <RowActions label={`Actions for ${item.name}`}>
-                      {renderItems(item)}
-                    </RowActions>
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          }}
+                  )}
+                </span>
+              </TableCell>
+
+              {/* Status */}
+              <TableCell>
+                <StateBadge
+                  state={item.state}
+                  subState={item.subState}
+                  userStopped={item.user_stopped}
+                  failureCount={item.failure_count}
+                  backoffSeconds={item.backoff_seconds}
+                  blockedReason={item.blocked_reason}
+                />
+              </TableCell>
+
+              {/* Uptime */}
+              <TableCell className="text-sm text-muted-fg tabular-nums hidden sm:table-cell">
+                {fmtUptime(item.started_at)}
+              </TableCell>
+
+              {/* Web / Ports */}
+              <TableCell className="hidden md:table-cell">
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                  {item.homepage_url && (
+                    <a
+                      href={item.homepage_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="size-3 shrink-0" />
+                      <span className="max-w-[12rem] truncate">
+                        {(() => { try { return new URL(item.homepage_url).hostname; } catch { return item.homepage_url; } })()}
+                      </span>
+                    </a>
+                  )}
+                  <PortChips ports={item.port_mappings} />
+                </span>
+              </TableCell>
+
+              {/* AutoStart */}
+              <TableCell>
+                <Switch
+                  isSelected={item.daemon_enabled}
+                  onChange={(selected: boolean) => toggleAutoStartFn(item.unit_name, selected)}
+                  aria-label="AutoStart toggle"
+                />
+              </TableCell>
+            </TableRow>
+          )}
         </TableBody>
       </Table>
     );
   }
 
-  // ── Normal card grid ────────────────────────────────────────────────────
-  function NormalCardGrid({ sorted: items, callbacks: cb, triggerUpdate: triggerUpdateFn }: {
-    sorted: ServiceRow[];
-    callbacks: ServiceActionsCallbacks;
-    triggerUpdate: (unit: string) => void;
-  }) {
-    // Convert ServiceRow → ServiceCardRow shape
-    const toCardRow = (item: ServiceRow): ServiceCardRow => ({
-      unit_name: item.unit_name,
-      name: item.name,
-      state: item.state,
-      subState: item.subState,
-      type: item.type,
-      daemon_enabled: item.daemon_enabled,
-      image: item.image,
-      boot_order: item.boot_order,
-      boot_delay: item.boot_delay,
-      restart_delay: item.restart_delay,
-      depends_on: item.depends_on,
-      user_stopped: item.user_stopped,
-      failure_count: item.failure_count,
-      backoff_seconds: item.backoff_seconds,
-      blocked_reason: item.blocked_reason,
-      icon_url: item.icon_url || undefined,
-      homepage_url: item.homepage_url || undefined,
-      update_available: item.update_available,
-      remote_version: item.remote_version,
-    });
-
-    return (
-      <div className="flex flex-wrap gap-3 p-1">
-        {items.map((item) => (
-          <ServiceCard
-            key={item.unit_name}
-            item={toCardRow(item)}
-            callbacks={cb}
-            onTriggerUpdate={triggerUpdateFn}
-          />
-        ))}
-      </div>
-    );
-  }
-
   const activeCount = services?.filter((s) => s.active_state === "active").length ?? 0;
 
-  const viewToggle = (
-    <Tooltip>
-      <TooltipTrigger>
-        <Button
-          intent="plain"
-          size="sq-xs"
-          aria-label={viewMode === "expert" ? "Switch to card view" : "Switch to table view"}
-          onPress={toggleViewMode}
-        >
-          {viewMode === "expert" ? <LayoutGrid className="size-4" /> : <List className="size-4" />}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        {viewMode === "expert" ? "Card view" : "Table view"}
-      </TooltipContent>
-    </Tooltip>
-  );
-
   const bulkBar = (
-    <div className="flex items-center gap-2">
-      <BulkControlBar
-        activeCount={activeCount}
-        totalCount={totalCount}
-        bulkLoading={bulkLoading}
-        onStartAll={() => doBulkAction("start")}
-        onRequestStopAll={() => setConfirmBulkStop(true)}
-      />
-      {viewToggle}
-    </div>
+    <BulkControlBar
+      activeCount={activeCount}
+      totalCount={totalCount}
+      bulkLoading={bulkLoading}
+      viewMode={viewMode}
+      onStartAll={() => doBulkAction("start")}
+      onRequestStopAll={() => setConfirmBulkStop(true)}
+      onToggleView={toggleViewMode}
+    />
   );
 
   return (
@@ -572,30 +513,23 @@ export default function ServicesPage() {
       contextMenu={renderContextMenuItems}
       beforeTable={bulkBar}
     >
-      {viewMode === "expert" ? (
-        <ExpertTableContent
+      {viewMode === "cards" ? (
+        <ServiceCardsGrid
+          items={sorted}
+          buildMenuCallbacks={buildMenuCallbacks}
+          toggleAutoStart={toggleAutoStart}
+          triggerUpdate={triggerUpdate}
+          renderContextMenuItems={renderContextMenuItems}
+        />
+      ) : (
+        <ServicesTableContent
           sorted={sorted}
           sortDescriptor={sortDescriptor}
           onSortChange={(d) => setSortDescriptor({ column: String(d.column), direction: d.direction })}
           triggerUpdate={triggerUpdate}
           toggleAutoStart={toggleAutoStart}
-          renderMenuItems={renderMenuItems}
-        />
-      ) : (
-        <NormalCardGrid
-          sorted={sorted}
-          callbacks={buildMenuCallbacks()}
-          triggerUpdate={triggerUpdate}
         />
       )}
-
-      {/* Logs Modal */}
-      <LogsDialog
-        open={logs.open}
-        name={logs.name}
-        content={logs.content}
-        onClose={() => setLogs((p) => ({ ...p, open: false }))}
-      />
 
       {/* Pull Modal */}
       <PullDialog

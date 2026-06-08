@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/ogglord/homelab-daemon/internal/cmdrunner"
-	api "github.com/ogglord/homelab-api"
 )
 
 var log = logging.Logger("updates")
@@ -24,11 +23,19 @@ type UpdateInfo struct {
 	RemoteID       string `json:"remote_id"`
 }
 
+// PortBinding is a single container-to-host port mapping collected from podman ps.
+type PortBinding struct {
+	ContainerPort int    `json:"container_port"`
+	HostPort      int    `json:"host_port"`
+	Protocol      string `json:"protocol"`
+	HostIP        string `json:"host_ip,omitempty"`
+}
+
 type MetadataEntry struct {
-	Image       string           `json:"image"`
-	Description string           `json:"description"`
-	RevisionURL string           `json:"revision_url"`
-	Ports       []api.PortMapping `json:"ports,omitempty"`
+	Image       string        `json:"image"`
+	Description string        `json:"description"`
+	RevisionURL string        `json:"revision_url"`
+	Ports       []PortBinding `json:"ports,omitempty"`
 }
 
 type Module struct {
@@ -223,21 +230,17 @@ func (m *Module) runChecks(ctx context.Context) {
 
 		// Pick the best description from well-known labels.
 		desc := ""
-		for _, key := range []string{
-			"homepage.description",
-			"org.opencontainers.image.description",
-			"description",
-		} {
-			if v := c.Labels[key]; v != "" {
+		for _, key := range []string{"homepage.description", "org.opencontainers.image.description", "description"} {
+			if v := strings.TrimSpace(c.Labels[key]); v != "" {
 				desc = v
 				break
 			}
 		}
 
-		// Build revision URL from source + revision labels.
+		// Build revision URL from source + commit labels.
 		revUrl := ""
-		rev := c.Labels["org.opencontainers.image.revision"]
-		sourceUrl := strings.TrimSuffix(c.Labels["org.opencontainers.image.source"], ".git")
+		rev := strings.TrimSpace(c.Labels["org.opencontainers.image.revision"])
+		sourceUrl := strings.TrimSuffix(strings.TrimSpace(c.Labels["org.opencontainers.image.source"]), ".git")
 		if rev != "" && sourceUrl != "" {
 			if strings.Contains(sourceUrl, "github.com") || strings.Contains(sourceUrl, "gitlab.com") {
 				revUrl = fmt.Sprintf("%s/commit/%s", sourceUrl, rev)
@@ -246,18 +249,22 @@ func (m *Module) runChecks(ctx context.Context) {
 			}
 		}
 
-		// Convert port bindings to api.PortMapping, filtering catch-all host IPs.
-		var ports []api.PortMapping
+		// Collect port bindings, skipping unroutable host IPs.
+		var ports []PortBinding
 		for _, p := range c.Ports {
-			pm := api.PortMapping{
+			if p.ContainerPort == 0 || p.HostPort == 0 {
+				continue
+			}
+			hostIP := p.HostIP
+			if hostIP == "0.0.0.0" || hostIP == "::" {
+				hostIP = ""
+			}
+			ports = append(ports, PortBinding{
 				ContainerPort: p.ContainerPort,
 				HostPort:      p.HostPort,
 				Protocol:      p.Protocol,
-			}
-			if p.HostIP != "" && p.HostIP != "0.0.0.0" {
-				pm.HostIP = p.HostIP
-			}
-			ports = append(ports, pm)
+				HostIP:        hostIP,
+			})
 		}
 
 		newMetadata[name] = MetadataEntry{

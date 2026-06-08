@@ -1,33 +1,37 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, LayoutGrid, LayoutList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export interface BulkControlBarProps {
   activeCount: number;
   totalCount: number;
   bulkLoading: "stop" | "start" | null;
+  viewMode: "table" | "cards";
   onStartAll: () => void;
   onRequestStopAll: () => void;
+  onToggleView: () => void;
 }
 
-/**
- * Top-of-page row with running-count summary and Start All / Stop All
- * buttons. Stop All routes through the confirmation modal (the parent
- * owns that state).
- */
 export function BulkControlBar({
-  activeCount, totalCount, bulkLoading, onStartAll, onRequestStopAll,
+  activeCount, totalCount, bulkLoading, viewMode, onStartAll, onRequestStopAll, onToggleView,
 }: BulkControlBarProps) {
   return (
-    <div className="rounded-lg border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div>
-        <p className="text-sm font-medium">Service Control</p>
-        <p className="text-xs text-muted-fg">
-          {bulkLoading
-            ? (bulkLoading === "stop" ? "Stopping all services…" : "Starting all services…")
-            : `${activeCount} of ${totalCount} services running`}
-        </p>
-      </div>
-      <div className="flex gap-2">
+    <div className="flex items-center justify-between gap-3 pb-3">
+      <p className="text-sm text-muted-fg">
+        {bulkLoading
+          ? (bulkLoading === "stop" ? "Stopping all services…" : "Starting all services…")
+          : `${activeCount} of ${totalCount} services running`}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          intent="plain"
+          size="sq-sm"
+          onPress={onToggleView}
+          aria-label={viewMode === "cards" ? "Switch to table view" : "Switch to card view"}
+        >
+          {viewMode === "cards"
+            ? <LayoutList className="size-4" />
+            : <LayoutGrid className="size-4" />}
+        </Button>
         <Button intent="primary" onPress={onStartAll} isDisabled={!!bulkLoading} id="btn-start-all">
           {bulkLoading === "start" ? <RefreshCw className="size-4 animate-spin" /> : null}
           Start All
