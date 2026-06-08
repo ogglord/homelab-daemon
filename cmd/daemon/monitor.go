@@ -101,6 +101,19 @@ func (cb *CircuitBreaker) Reset(unit string) {
 	delete(cb.units, unit)
 }
 
+// unitOpMu serialises concurrent start/stop calls on the same unit.
+// Keyed by unit name; values are *sync.Mutex. This prevents a monitor
+// restart from racing with an API stop (or vice-versa) on the same unit.
+var unitOpMu sync.Map
+
+// lockUnit acquires the per-unit mutex and returns an unlock function.
+func lockUnit(unit string) func() {
+	v, _ := unitOpMu.LoadOrStore(unit, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
 // systemctlTimeout is the per-call timeout applied to every systemctl
 // invocation so a hung systemd transaction (e.g. waiting on a dead D-Bus
 // peer) cannot stall the monitor loop or an API request indefinitely.
@@ -207,7 +220,11 @@ func isMounted(path string) bool {
 }
 
 // startUnit calls "systemctl start <unit>".
+// Acquires the per-unit mutex so concurrent monitor restarts and API calls
+// cannot issue overlapping systemctl start/stop on the same unit.
 func startUnit(unit string) error {
+	unlock := lockUnit(unit)
+	defer unlock()
 	ctx, cancel := systemctlCtx()
 	defer cancel()
 	res, err := cmdrunner.New("monitor", "systemctl", "start", unit).
@@ -227,6 +244,8 @@ func startUnit(unit string) error {
 // clears that failed state so the post-stop view reads "inactive". A
 // user-initiated stop is always a clean stop from our perspective.
 func stopUnit(unit string) error {
+	unlock := lockUnit(unit)
+	defer unlock()
 	ctx, cancel := systemctlCtx()
 	defer cancel()
 	res, err := cmdrunner.New("monitor", "systemctl", "stop", unit).
@@ -333,6 +352,16 @@ func boot(ctx context.Context, cfg *Config, state *State) {
 			}
 		}
 
+		// Fix C: re-verify all deps are still active immediately before starting.
+		// A dependency can crash between waitActive returning and startUnit being
+		// called, especially when boot_delay is non-zero.
+		for _, dep := range svc.DependsOn {
+			if !isActive(dep) {
+				log.Error("dependency became inactive before start, skipping service", "dep", dep)
+				goto next
+			}
+		}
+
 		// Check constraints (mounts).
 		if err := checkConstraints(svc); err != nil {
 			log.Error("constraint check failed, skipping service", "error", err)
@@ -364,6 +393,9 @@ func boot(ctx context.Context, cfg *Config, state *State) {
 // It uses a CircuitBreaker to apply exponential backoff after consecutive failures.
 func monitor(ctx context.Context, cfg *Config, state *State, breaker *CircuitBreaker, notify *notifier.Notifier) {
 	prevFailures := make(map[string]int)
+	// inFlight tracks units that already have a restart goroutine running,
+	// preventing duplicate restarts when a unit takes longer than 5s to settle.
+	var inFlight sync.Map
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -428,7 +460,16 @@ func monitor(ctx context.Context, cfg *Config, state *State, breaker *CircuitBre
 					continue
 				}
 
-				restart(ctx, svc, breaker)
+				// Skip if a restart goroutine is already running for this unit.
+				if _, loaded := inFlight.LoadOrStore(svc.Unit, struct{}{}); loaded {
+					monitorLog.Debug("restart already in flight, skipping", "unit", svc.Unit)
+					continue
+				}
+
+				go func(s Service) {
+					defer inFlight.Delete(s.Unit)
+					restart(ctx, s, breaker)
+				}(svc)
 			}
 		}
 	}
@@ -474,6 +515,15 @@ func restart(ctx context.Context, svc Service, breaker *CircuitBreaker) {
 		select {
 		case <-time.After(time.Duration(svc.RestartDelay) * time.Second):
 		case <-ctx.Done():
+			return
+		}
+	}
+
+	// Fix A: verify depends_on before restarting. A missing dependency is a
+	// constraint miss, not a service failure — don't record it in the breaker.
+	for _, dep := range svc.DependsOn {
+		if !isActive(dep) {
+			log.Info("restart skipped — dependency inactive", "dep", dep)
 			return
 		}
 	}

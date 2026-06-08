@@ -440,6 +440,16 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 		// Apply changes
 		if payload.Enabled != nil {
 			cfg.Services[idx].Enabled = *payload.Enabled
+			// Fix D: re-enabling a service must clear the sticky user-stopped flag
+			// so the monitor loop will restart it. Without this the monitor sees
+			// IsUserStopped==true and silently skips the unit forever.
+			// Fix E: also reset the circuit breaker so any backed-off state from
+			// before the service was disabled doesn't block the first restart.
+			if *payload.Enabled {
+				unit := cfg.Services[idx].Unit
+				state.SetUserStopped(unit, false)
+				breaker.Reset(unit)
+			}
 		}
 		if payload.Order != nil {
 			cfg.Services[idx].Order = *payload.Order
@@ -1096,6 +1106,11 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 				DaemonEnabled:   svc.Enabled,
 				FailureCount:    consecutive,
 				BackoffSeconds:  backoffSecs,
+				BlockedReason:   computeBlockedReason(svc, or(activeState, "inactive"), consecutive, backoffUntil, state.IsUserStopped(u)),
+				RequiresMounts:  svc.RequiresMounts,
+				IconURL:         svc.IconURL,
+				HomepageURL:     svc.HomepageURL,
+				PortMappings:    mdata[name].Ports,
 			})
 		}
 
@@ -1255,6 +1270,7 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 				RequiresMounts:  svc.RequiresMounts,
 				IconURL:         svc.IconURL,
 				HomepageURL:     svc.HomepageURL,
+				PortMappings:    mdata[name].Ports,
 			})
 		}
 

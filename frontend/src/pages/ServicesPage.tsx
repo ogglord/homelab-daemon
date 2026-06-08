@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
+import { ScrollText, LayoutGrid, List } from "lucide-react";
 import { PageShell, useTable, RowActions, useRowContextMenu } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +9,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useOverview } from "@/hooks/use-overview";
-import type { ServiceInfo } from "@/types";
+import type { ServiceInfo, PortMapping } from "@/types";
 import { StatusDot } from "@/components/ui/status-dot";
 import { StateBadge, fmtBackoff } from "./ServicesPage/StateBadge";
 import { LogsDialog } from "./ServicesPage/LogsDialog";
@@ -16,12 +17,17 @@ import { PullDialog } from "./ServicesPage/PullDialog";
 import { ServiceConfigSheet, type ServiceConfigDraft } from "./ServicesPage/ServiceConfigSheet";
 import { ConfirmDialogs } from "./ServicesPage/ConfirmDialogs";
 import { BulkControlBar } from "./ServicesPage/BulkControlBar";
+import { PortChips } from "./ServicesPage/PortChips";
+import { ServiceCard, type ServiceCardRow } from "./ServicesPage/ServiceCard";
 import {
   renderMenuItems as renderMenuItemsHelper,
   renderContextMenuItems as renderContextMenuItemsHelper,
   type ServiceActionsCallbacks,
   type ServiceActionItem,
 } from "./ServicesPage/ServiceActionsMenu";
+
+const VIEW_STORAGE_KEY = "homelab-services-view";
+type ViewMode = "normal" | "expert";
 
 // Row-level view model — flat fields for sorting/filtering.
 interface ServiceRow extends Record<string, unknown> {
@@ -47,6 +53,9 @@ interface ServiceRow extends Record<string, unknown> {
   backoff_seconds: number;
   blocked_reason: string;
   requires_mount: string[];
+  icon_url: string;
+  homepage_url: string;
+  port_mappings: PortMapping[];
 }
 
 function toRow(svc: ServiceInfo): ServiceRow {
@@ -56,7 +65,7 @@ function toRow(svc: ServiceInfo): ServiceRow {
     type: svc.type,
     state: svc.active_state,
     subState: svc.sub_state,
-    description: svc.description || "\u2014",
+    description: svc.description || "—",
     unit_name: svc.unit_name,
     update_available: svc.update_available,
     current_version: svc.current_version || "",
@@ -73,6 +82,9 @@ function toRow(svc: ServiceInfo): ServiceRow {
     backoff_seconds: svc.backoff_seconds,
     blocked_reason: svc.blocked_reason || "",
     requires_mount: svc.requires_mount || [],
+    icon_url: svc.icon_url || "",
+    homepage_url: svc.homepage_url || "",
+    port_mappings: svc.port_mappings || [],
   };
 }
 
@@ -85,6 +97,21 @@ export default function ServicesPage() {
   const [confirmBulkStop, setConfirmBulkStop] = useState(false);
   const [bulkLoading, setBulkLoading] = useState<"stop" | "start" | null>(null);
   const [configDrawer, setConfigDrawer] = useState<ServiceConfigDraft | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    try {
+      return (localStorage.getItem(VIEW_STORAGE_KEY) as ViewMode) ?? "expert";
+    } catch {
+      return "expert";
+    }
+  });
+
+  const toggleViewMode = useCallback(() => {
+    setViewMode((prev) => {
+      const next = prev === "expert" ? "normal" : "expert";
+      try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
 
   // Sort & filter (from shared hook)
   const rows = useMemo(() => services?.map(toRow) ?? null, [services]);
@@ -247,7 +274,6 @@ export default function ServicesPage() {
     try {
       const resp = await fetch(`/api/${action}-all`, { method: "POST" });
       if (!resp.ok) {
-        const body = await resp.text().catch(() => "");
         toast.error(`Bulk ${action} failed: HTTP ${resp.status}`);
         return;
       }
@@ -317,9 +343,8 @@ export default function ServicesPage() {
   const renderContextMenuItems = (item: ServiceActionItem) =>
     renderContextMenuItemsHelper(item, buildMenuCallbacks());
 
-  // Inner component rendered inside PageShell so useRowContextMenu
-  // has access to the TableContext provider.
-  function ServicesTableContent({ sorted: items, sortDescriptor: sd, onSortChange, triggerUpdate: triggerUpdateFn, toggleAutoStart: toggleAutoStartFn, renderMenuItems: renderItems }: {
+  // ── Expert table (Unraid-style) ─────────────────────────────────────────
+  function ExpertTableContent({ sorted: items, sortDescriptor: sd, onSortChange, triggerUpdate: triggerUpdateFn, toggleAutoStart: toggleAutoStartFn, renderMenuItems: renderItems }: {
     sorted: ServiceRow[];
     sortDescriptor: any;
     onSortChange: (d: any) => void;
@@ -330,33 +355,55 @@ export default function ServicesPage() {
     const onRowCtx = useRowContextMenu<ServiceRow>();
 
     return (
-      <>
-        <Table
-          aria-label="Services"
-          sortDescriptor={sd}
-          onSortChange={(d: any) => onSortChange({ column: String(d.column), direction: d.direction as "ascending" | "descending" })}
-        >
-          <TableHeader columns={[
-            { id: "name",        name: "Name",        isRowHeader: true, className: "w-40 min-w-[8rem]" },
-            { id: "type",        name: "Type",        className: "w-20" },
-            { id: "status",      name: "Status",      className: "w-44 min-w-[11rem]" },
-            { id: "description", name: "Description", className: "hidden md:table-cell" },
-            { id: "autostart",   name: "AutoStart",   className: "w-24" },
-            { id: "actions",     name: "",            className: "w-10" },
-          ] as Array<{ id: string; name: string; isRowHeader?: boolean; className?: string }>}>
-            {(column) => (
-              <TableColumn
-                isRowHeader={column.id === "name"}
-                allowsSorting={column.id !== "actions" && column.id !== "autostart"}
-                className={column.className ?? ""}
-              >
-                {column.name}
-              </TableColumn>
-            )}
-          </TableHeader>
-          <TableBody items={items}>
-            {(item: ServiceRow) => (
+      <Table
+        aria-label="Services"
+        sortDescriptor={sd}
+        onSortChange={(d: any) => onSortChange({ column: String(d.column), direction: d.direction as "ascending" | "descending" })}
+      >
+        <TableHeader columns={[
+          { id: "icon",     name: "",            className: "w-11" },
+          { id: "name",     name: "Name",        isRowHeader: true, className: "w-40 min-w-[8rem]" },
+          { id: "status",   name: "Status",      className: "w-44 min-w-[11rem]" },
+          { id: "web",      name: "Web / Ports", className: "hidden md:table-cell" },
+          { id: "autostart",name: "AutoStart",   className: "w-24" },
+          { id: "actions",  name: "",            className: "w-14" },
+        ] as Array<{ id: string; name: string; isRowHeader?: boolean; className?: string }>}>
+          {(column) => (
+            <TableColumn
+              isRowHeader={column.id === "name"}
+              allowsSorting={column.id === "name" || column.id === "status"}
+              className={column.className ?? ""}
+            >
+              {column.name}
+            </TableColumn>
+          )}
+        </TableHeader>
+        <TableBody items={items}>
+          {(item: ServiceRow) => {
+            const isRunning = item.state === "active" || item.state === "activating";
+            return (
               <TableRow onContextMenu={onRowCtx(item)}>
+                {/* Icon column */}
+                <TableCell>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      {item.icon_url ? (
+                        <img
+                          src={item.icon_url}
+                          alt={item.name}
+                          className={`size-8 rounded object-contain transition-all ${!isRunning ? "opacity-40 grayscale" : ""}`}
+                        />
+                      ) : (
+                        <div className={`size-8 rounded bg-muted flex items-center justify-center text-xs font-bold text-muted-fg ${!isRunning ? "opacity-40" : ""}`}>
+                          {item.name[0]?.toUpperCase() ?? "?"}
+                        </div>
+                      )}
+                    </TooltipTrigger>
+                    <TooltipContent>{item.description}</TooltipContent>
+                  </Tooltip>
+                </TableCell>
+
+                {/* Name column */}
                 <TableCell className="text-sm">
                   <span className="inline-flex items-center gap-1.5">
                     {item.name}
@@ -377,9 +424,8 @@ export default function ServicesPage() {
                     )}
                   </span>
                 </TableCell>
-                <TableCell>
-                  <span className="text-sm text-muted-fg">{item.type}</span>
-                </TableCell>
+
+                {/* Status column */}
                 <TableCell>
                   <StateBadge
                     state={item.state}
@@ -390,9 +436,16 @@ export default function ServicesPage() {
                     blockedReason={item.blocked_reason}
                   />
                 </TableCell>
-                <TableCell className="text-sm text-muted-fg max-w-xs truncate hidden md:table-cell">
-                  {item.description}
+
+                {/* Web / Ports column */}
+                <TableCell className="hidden md:table-cell">
+                  <PortChips
+                    ports={item.port_mappings}
+                    homepageUrl={item.homepage_url || undefined}
+                  />
                 </TableCell>
+
+                {/* AutoStart column */}
                 <TableCell>
                   <Switch
                     isSelected={item.daemon_enabled}
@@ -400,29 +453,110 @@ export default function ServicesPage() {
                     aria-label="AutoStart toggle"
                   />
                 </TableCell>
+
+                {/* Actions column */}
                 <TableCell>
-                  <RowActions label={`Actions for ${item.name}`}>
-                    {renderItems(item)}
-                  </RowActions>
+                  <div className="flex items-center gap-0.5">
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Button
+                          intent="plain"
+                          size="sq-xs"
+                          aria-label="View logs"
+                          onPress={() => showLogs(item.unit_name)}
+                        >
+                          <ScrollText className="size-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Logs</TooltipContent>
+                    </Tooltip>
+                    <RowActions label={`Actions for ${item.name}`}>
+                      {renderItems(item)}
+                    </RowActions>
+                  </div>
                 </TableCell>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </>
+            );
+          }}
+        </TableBody>
+      </Table>
+    );
+  }
+
+  // ── Normal card grid ────────────────────────────────────────────────────
+  function NormalCardGrid({ sorted: items, callbacks: cb, triggerUpdate: triggerUpdateFn }: {
+    sorted: ServiceRow[];
+    callbacks: ServiceActionsCallbacks;
+    triggerUpdate: (unit: string) => void;
+  }) {
+    // Convert ServiceRow → ServiceCardRow shape
+    const toCardRow = (item: ServiceRow): ServiceCardRow => ({
+      unit_name: item.unit_name,
+      name: item.name,
+      state: item.state,
+      subState: item.subState,
+      type: item.type,
+      daemon_enabled: item.daemon_enabled,
+      image: item.image,
+      boot_order: item.boot_order,
+      boot_delay: item.boot_delay,
+      restart_delay: item.restart_delay,
+      depends_on: item.depends_on,
+      user_stopped: item.user_stopped,
+      failure_count: item.failure_count,
+      backoff_seconds: item.backoff_seconds,
+      blocked_reason: item.blocked_reason,
+      icon_url: item.icon_url || undefined,
+      homepage_url: item.homepage_url || undefined,
+      update_available: item.update_available,
+      remote_version: item.remote_version,
+    });
+
+    return (
+      <div className="flex flex-wrap gap-3 p-1">
+        {items.map((item) => (
+          <ServiceCard
+            key={item.unit_name}
+            item={toCardRow(item)}
+            callbacks={cb}
+            onTriggerUpdate={triggerUpdateFn}
+          />
+        ))}
+      </div>
     );
   }
 
   const activeCount = services?.filter((s) => s.active_state === "active").length ?? 0;
 
+  const viewToggle = (
+    <Tooltip>
+      <TooltipTrigger>
+        <Button
+          intent="plain"
+          size="sq-xs"
+          aria-label={viewMode === "expert" ? "Switch to card view" : "Switch to table view"}
+          onPress={toggleViewMode}
+        >
+          {viewMode === "expert" ? <LayoutGrid className="size-4" /> : <List className="size-4" />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {viewMode === "expert" ? "Card view" : "Table view"}
+      </TooltipContent>
+    </Tooltip>
+  );
+
   const bulkBar = (
-    <BulkControlBar
-      activeCount={activeCount}
-      totalCount={totalCount}
-      bulkLoading={bulkLoading}
-      onStartAll={() => doBulkAction("start")}
-      onRequestStopAll={() => setConfirmBulkStop(true)}
-    />
+    <div className="flex items-center gap-2">
+      <BulkControlBar
+        activeCount={activeCount}
+        totalCount={totalCount}
+        bulkLoading={bulkLoading}
+        onStartAll={() => doBulkAction("start")}
+        onRequestStopAll={() => setConfirmBulkStop(true)}
+      />
+      {viewToggle}
+    </div>
   );
 
   return (
@@ -438,14 +572,22 @@ export default function ServicesPage() {
       contextMenu={renderContextMenuItems}
       beforeTable={bulkBar}
     >
-      <ServicesTableContent
-        sorted={sorted}
-        sortDescriptor={sortDescriptor}
-        onSortChange={(d) => setSortDescriptor({ column: String(d.column), direction: d.direction })}
-        triggerUpdate={triggerUpdate}
-        toggleAutoStart={toggleAutoStart}
-        renderMenuItems={renderMenuItems}
-      />
+      {viewMode === "expert" ? (
+        <ExpertTableContent
+          sorted={sorted}
+          sortDescriptor={sortDescriptor}
+          onSortChange={(d) => setSortDescriptor({ column: String(d.column), direction: d.direction })}
+          triggerUpdate={triggerUpdate}
+          toggleAutoStart={toggleAutoStart}
+          renderMenuItems={renderMenuItems}
+        />
+      ) : (
+        <NormalCardGrid
+          sorted={sorted}
+          callbacks={buildMenuCallbacks()}
+          triggerUpdate={triggerUpdate}
+        />
+      )}
 
       {/* Logs Modal */}
       <LogsDialog

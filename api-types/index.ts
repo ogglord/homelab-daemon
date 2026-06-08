@@ -86,6 +86,34 @@ export interface ErrorResponse {
 }
 
 //////////
+// source: logviewer.go
+
+/**
+ * LogViewerConfig is the schema for the dashboard's log viewer page.
+ * Generated at runtime by the daemon from its managed services list
+ * so every service in services.yaml automatically gets a filter tab.
+ */
+export interface LogViewerConfig {
+  defaultMode: string;
+  defaultWindow: string;
+  maxLines: number /* int */;
+  services: LogViewerServiceConfig[];
+}
+export interface LogViewerServiceConfig {
+  id: string;
+  label: string;
+  selector: string; // LogsQL selector, e.g. {unit="myservice.service"}
+  fields: LogViewerField[];
+  format: string;
+}
+export interface LogViewerField {
+  name: string;
+  label: string;
+  type: string; // "enum" | "text" | "number"
+  values?: string[];
+}
+
+//////////
 // source: secrets.go
 
 /**
@@ -140,6 +168,17 @@ export interface DeployEvent {
 //////////
 // source: services.go
 
+/**
+ * PortMapping describes a single host↔container port binding as reported
+ * by podman ps --format json. Protocol is "tcp" or "udp". HostIP is omitted
+ * when it is the catch-all "0.0.0.0" or empty.
+ */
+export interface PortMapping {
+  container_port: number /* int */;
+  host_port: number /* int */;
+  protocol: string; // "tcp" | "udp"
+  host_ip?: string; // omit if "0.0.0.0" or ""
+}
 /**
  * Service is the static configuration for one managed systemd unit.
  * Mirrors the daemon's services.yaml. Emitted by GET /api/v1/config.
@@ -230,6 +269,7 @@ export interface ServiceInfo {
   requires_mount: string[]; // mountpoints that must be present
   icon_url?: string;
   homepage_url?: string;
+  port_mappings?: PortMapping[];
 }
 
 //////////

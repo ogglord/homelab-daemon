@@ -1,5 +1,15 @@
 package api
 
+// PortMapping describes a single host↔container port binding as reported
+// by podman ps --format json. Protocol is "tcp" or "udp". HostIP is omitted
+// when it is the catch-all "0.0.0.0" or empty.
+type PortMapping struct {
+	ContainerPort int    `json:"container_port"`
+	HostPort      int    `json:"host_port"`
+	Protocol      string `json:"protocol"`          // "tcp" | "udp"
+	HostIP        string `json:"host_ip,omitempty"` // omit if "0.0.0.0" or ""
+}
+
 // Service is the static configuration for one managed systemd unit.
 // Mirrors the daemon's services.yaml. Emitted by GET /api/v1/config.
 type Service struct {
@@ -82,6 +92,7 @@ type ServiceInfo struct {
 	BackoffSeconds  int      `json:"backoff_seconds"`
 	BlockedReason   string   `json:"blocked_reason"`  // why the daemon won't start/restart this service
 	RequiresMounts  []string `json:"requires_mount"`  // mountpoints that must be present
-	IconURL         string   `json:"icon_url,omitempty"`
-	HomepageURL     string   `json:"homepage_url,omitempty"`
+	IconURL         string        `json:"icon_url,omitempty"`
+	HomepageURL     string        `json:"homepage_url,omitempty"`
+	PortMappings    []PortMapping `json:"port_mappings,omitempty"`
 }

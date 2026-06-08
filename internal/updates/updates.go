@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ogglord/homelab-daemon/internal/cmdrunner"
+	api "github.com/ogglord/homelab-api"
 )
 
 var log = logging.Logger("updates")
@@ -24,9 +25,10 @@ type UpdateInfo struct {
 }
 
 type MetadataEntry struct {
-	Image       string `json:"image"`
-	Description string `json:"description"`
-	RevisionURL string `json:"revision_url"`
+	Image       string           `json:"image"`
+	Description string           `json:"description"`
+	RevisionURL string           `json:"revision_url"`
+	Ports       []api.PortMapping `json:"ports,omitempty"`
 }
 
 type Module struct {
@@ -153,6 +155,19 @@ func (m *Module) Start(ctx context.Context) {
 	}
 }
 
+// podmanPsEntry is the JSON shape of one entry from `podman ps -a --format json`.
+type podmanPsEntry struct {
+	Names  []string          `json:"Names"`
+	Image  string            `json:"Image"`
+	Labels map[string]string `json:"Labels"`
+	Ports  []struct {
+		HostIP        string `json:"host_ip"`
+		ContainerPort int    `json:"container_port"`
+		HostPort      int    `json:"host_port"`
+		Protocol      string `json:"protocol"`
+	} `json:"Ports"`
+}
+
 type podmanImageInspect struct {
 	Digest      string            `json:"Digest"`
 	RepoDigests []string          `json:"RepoDigests"`
@@ -182,8 +197,8 @@ type skopeoInspect struct {
 }
 
 func (m *Module) runChecks(ctx context.Context) {
-	// Query podman ps -a with custom format fields
-	cmdRes, err := cmdrunner.New("updates", "podman", "ps", "-a", "--format", "{{.Names}}\t{{.Image}}\t{{index .Labels \"homepage.description\"}}\t{{index .Labels \"org.opencontainers.image.description\"}}\t{{index .Labels \"description\"}}\t{{index .Labels \"org.opencontainers.image.revision\"}}\t{{index .Labels \"org.opencontainers.image.source\"}}").
+	// Use --format json for structured output including port bindings.
+	cmdRes, err := cmdrunner.New("updates", "podman", "ps", "-a", "--format", "json").
 		WithContext(ctx).
 		Run()
 	if err != nil {
@@ -191,48 +206,39 @@ func (m *Module) runChecks(ctx context.Context) {
 		return
 	}
 
-	lines := strings.Split(strings.TrimSpace(cmdRes.Stdout), "\n")
+	var containers []podmanPsEntry
+	if err := json.Unmarshal([]byte(cmdRes.Stdout), &containers); err != nil {
+		log.Error("podman ps JSON parse failed", "error", err)
+		return
+	}
+
 	newUpdates := make(map[string]UpdateInfo)
 	newMetadata := make(map[string]MetadataEntry)
 
-	for _, line := range lines {
-		if line == "" {
+	for _, c := range containers {
+		if len(c.Names) == 0 || c.Image == "" {
 			continue
 		}
-		parts := strings.Split(line, "\t")
-		if len(parts) < 2 {
-			continue
-		}
-		name := strings.TrimSpace(parts[0])
-		image := strings.TrimSpace(parts[1])
-		if name == "" || image == "" {
-			continue
-		}
+		name := c.Names[0]
 
-		// Pick the best description
+		// Pick the best description from well-known labels.
 		desc := ""
-		for _, idx := range []int{2, 3, 4} {
-			if idx < len(parts) {
-				val := strings.TrimSpace(parts[idx])
-				if val != "" && val != "<nil>" {
-					desc = val
-					break
-				}
+		for _, key := range []string{
+			"homepage.description",
+			"org.opencontainers.image.description",
+			"description",
+		} {
+			if v := c.Labels[key]; v != "" {
+				desc = v
+				break
 			}
 		}
 
-		// Revision URL
+		// Build revision URL from source + revision labels.
 		revUrl := ""
-		var rev, sourceUrl string
-		if len(parts) > 5 {
-			rev = strings.TrimSpace(parts[5])
-		}
-		if len(parts) > 6 {
-			sourceUrl = strings.TrimSpace(parts[6])
-		}
-
-		if rev != "" && rev != "<nil>" && sourceUrl != "" && sourceUrl != "<nil>" {
-			sourceUrl = strings.TrimSuffix(sourceUrl, ".git")
+		rev := c.Labels["org.opencontainers.image.revision"]
+		sourceUrl := strings.TrimSuffix(c.Labels["org.opencontainers.image.source"], ".git")
+		if rev != "" && sourceUrl != "" {
 			if strings.Contains(sourceUrl, "github.com") || strings.Contains(sourceUrl, "gitlab.com") {
 				revUrl = fmt.Sprintf("%s/commit/%s", sourceUrl, rev)
 			} else {
@@ -240,19 +246,32 @@ func (m *Module) runChecks(ctx context.Context) {
 			}
 		}
 
-		newMetadata[name] = MetadataEntry{
-			Image:       image,
-			Description: desc,
-			RevisionURL: revUrl,
+		// Convert port bindings to api.PortMapping, filtering catch-all host IPs.
+		var ports []api.PortMapping
+		for _, p := range c.Ports {
+			pm := api.PortMapping{
+				ContainerPort: p.ContainerPort,
+				HostPort:      p.HostPort,
+				Protocol:      p.Protocol,
+			}
+			if p.HostIP != "" && p.HostIP != "0.0.0.0" {
+				pm.HostIP = p.HostIP
+			}
+			ports = append(ports, pm)
 		}
 
-		// Now query local and remote digests
-		log.Debug("Checking image update state", "name", name, "image", image)
-		upInfo := m.checkSingleImage(ctx, image)
-		newUpdates[name] = upInfo
+		newMetadata[name] = MetadataEntry{
+			Image:       c.Image,
+			Description: desc,
+			RevisionURL: revUrl,
+			Ports:       ports,
+		}
+
+		log.Debug("Checking image update state", "name", name, "image", c.Image)
+		newUpdates[name] = m.checkSingleImage(ctx, c.Image)
 	}
 
-	// Update cached structures
+	// Update cached structures.
 	m.mu.Lock()
 	m.updates = newUpdates
 	m.metadata = newMetadata

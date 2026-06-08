@@ -22,6 +22,7 @@ export type { StatsSnapshot, Pool, Disk, Subvolume, BackupStatus,
   MountRequest, UnmountRequest, CommandResult,
   UpdateInfo, MetadataEntry, UpdatesStatus, VersionResponse,
   SecretEntry, PatchServiceRequest, PatchServiceResponse,
+  PortMapping,
 } from "./types.gen";
 
 // ── Frontend-only types ────────────────────────────────────────────────
