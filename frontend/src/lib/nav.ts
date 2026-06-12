@@ -26,6 +26,10 @@ export const navItems: NavItem[] = [
     label: "Logs",
   },
   {
+    path: "/external/https%3A%2F%2Fwetty.cignl.cc",
+    label: "Console",
+  },
+  {
     path: "",
     label: "Manage",
     children: [
