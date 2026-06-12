@@ -46,7 +46,7 @@ func NewScheduler(ctx context.Context, cfg *Config, state *State, notify *notifi
 		state:   state,
 		notify:  notify,
 		entries: make(map[string]cron.EntryID),
-		lastRun: make(map[string]time.Time),
+		lastRun: state.BackupLastRunAll(), // seed from persisted state so last-run survives daemon restarts
 	}
 	s.Reload(cfg)
 	return s
@@ -99,10 +99,13 @@ func (s *Scheduler) GetEntry(unit string) *cron.Entry {
 
 // recordRun stores the last-run start time for a unit. Called from
 // RunBackup so manual and cron-triggered runs both update the timestamp.
+// Also persists to state.json so the time survives daemon restarts.
 func (s *Scheduler) recordRun(unit string) {
+	now := time.Now()
 	s.mu.Lock()
-	s.lastRun[unit] = time.Now()
+	s.lastRun[unit] = now
 	s.mu.Unlock()
+	s.state.SetBackupLastRun(unit, now)
 }
 
 // LastRunStart returns the last recorded run start for a unit, or zero

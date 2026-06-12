@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	logging "github.com/ogglord/homelab-logging"
 )
@@ -14,22 +15,25 @@ var stateLog = logging.Logger("api")
 // State tracks which units were intentionally stopped through the daemon API.
 // It is persisted to disk so "unless-stopped" survives daemon and host reboots.
 type State struct {
-	mu          sync.RWMutex
-	userStopped map[string]bool
-	bootID      string // last-seen kernel boot id; "" until loaded
-	path        string
+	mu            sync.RWMutex
+	userStopped   map[string]bool
+	bootID        string            // last-seen kernel boot id; "" until loaded
+	backupLastRun map[string]time.Time // unit → last backup run start time
+	path          string
 }
 
 type stateFile struct {
-	UserStopped []string `json:"user_stopped"`
-	BootID      string   `json:"boot_id,omitempty"`
+	UserStopped   []string          `json:"user_stopped"`
+	BootID        string            `json:"boot_id,omitempty"`
+	BackupLastRun map[string]string `json:"backup_last_run,omitempty"` // unit → RFC3339
 }
 
 // newState loads existing state from disk (if any) and returns a State.
 func newState(path string, cfg *Config) *State {
 	s := &State{
-		userStopped: make(map[string]bool),
-		path:        path,
+		userStopped:   make(map[string]bool),
+		backupLastRun: make(map[string]time.Time),
+		path:          path,
 	}
 	s.load()
 	// Prune stale entries: only keep units that are still in config.
@@ -78,6 +82,33 @@ func (s *State) SetAllUserStopped(units []string, stopped bool) {
 		}
 	}
 	s.persist()
+}
+
+// SetBackupLastRun records the last run start time for a backup unit and persists.
+func (s *State) SetBackupLastRun(unit string, t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.backupLastRun[unit] = t
+	s.persist()
+}
+
+// BackupLastRunTime returns the persisted last-run start time for a backup unit,
+// or zero time if not recorded.
+func (s *State) BackupLastRunTime(unit string) time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.backupLastRun[unit]
+}
+
+// BackupLastRunAll returns a copy of all persisted backup last-run times.
+func (s *State) BackupLastRunAll() map[string]time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]time.Time, len(s.backupLastRun))
+	for k, v := range s.backupLastRun {
+		out[k] = v
+	}
+	return out
 }
 
 // UserStoppedList returns a snapshot of all user-stopped unit names.
@@ -135,6 +166,12 @@ func (s *State) persist() {
 	for u := range s.userStopped {
 		sf.UserStopped = append(sf.UserStopped, u)
 	}
+	if len(s.backupLastRun) > 0 {
+		sf.BackupLastRun = make(map[string]string, len(s.backupLastRun))
+		for u, t := range s.backupLastRun {
+			sf.BackupLastRun[u] = t.Format(time.RFC3339)
+		}
+	}
 	data, err := json.MarshalIndent(sf, "", "  ")
 	if err != nil {
 		return
@@ -159,5 +196,10 @@ func (s *State) load() {
 		s.userStopped[u] = true
 	}
 	s.bootID = sf.BootID
-	stateLog.Info("state restored", "user_stopped", len(s.userStopped), "boot_id", s.bootID)
+	for u, ts := range sf.BackupLastRun {
+		if t, err := time.Parse(time.RFC3339, ts); err == nil {
+			s.backupLastRun[u] = t
+		}
+	}
+	stateLog.Info("state restored", "user_stopped", len(s.userStopped), "boot_id", s.bootID, "backup_last_run", len(s.backupLastRun))
 }
