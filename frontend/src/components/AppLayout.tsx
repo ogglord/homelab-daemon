@@ -6,7 +6,7 @@ import { navItems } from "@/lib/nav";
 
 export default function AppLayout() {
   return (
-    <div className="min-h-screen bg-bg text-fg">
+    <div className="min-h-screen text-fg">
       <AppNavbar navItems={navItems} />
 
       <motion.main
