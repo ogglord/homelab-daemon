@@ -43,7 +43,7 @@ export function ServicesWidget() {
       <CardContent>
         {/* Header */}
         <div className="flex items-center gap-1.5 mb-3">
-          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">Services</span>
+          <span className="text-[10px] tracking-[0.15em] uppercase text-primary/60 font-semibold">Services</span>
           <span className="text-[10px] font-mono text-muted-fg">({visible.filter(s => s.active_state === "active").length}/{visible.length} online)</span>
         </div>
 

@@ -60,7 +60,7 @@ export function StorageWidget() {
       <CardContent>
         <div className="flex items-center gap-1.5 mb-2">
           <Database className="h-3.5 w-3.5 text-primary" />
-          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">Storage</span>
+          <span className="text-[10px] tracking-[0.15em] uppercase text-primary/60 font-semibold">Storage</span>
         </div>
 
         <div className="space-y-2">

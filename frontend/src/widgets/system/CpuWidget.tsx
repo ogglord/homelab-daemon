@@ -18,7 +18,7 @@ export function CpuWidget() {
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-1.5">
             <Cpu className="h-3.5 w-3.5 text-primary" />
-            <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">CPU</span>
+            <span className="text-[10px] tracking-[0.15em] uppercase text-primary/60 font-semibold">CPU</span>
           </div>
           <span className="text-[10px] font-mono text-muted-fg">{stats.System.CPUCores} cores</span>
         </div>

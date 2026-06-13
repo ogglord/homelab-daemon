@@ -18,7 +18,7 @@ export function TemperatureWidget() {
         {/* Header row */}
         <div className="flex items-center gap-1.5 mb-3">
           <Thermometer className="h-3.5 w-3.5 text-warning" />
-          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">Temperatures</span>
+          <span className="text-[10px] tracking-[0.15em] uppercase text-primary/60 font-semibold">Temperatures</span>
         </div>
 
         {/* Ring gauges */}

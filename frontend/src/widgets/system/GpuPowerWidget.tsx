@@ -18,7 +18,7 @@ export function GpuPowerWidget() {
         {/* Header row */}
         <div className="flex items-center gap-1.5 mb-2">
           <Zap className="h-3.5 w-3.5 text-warning" />
-          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">iGPU Power</span>
+          <span className="text-[10px] tracking-[0.15em] uppercase text-primary/60 font-semibold">iGPU Power</span>
         </div>
 
         {/* Stat rows */}

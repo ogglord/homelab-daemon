@@ -26,7 +26,7 @@ export function NetworkWidget() {
         {/* Header row */}
         <div className="flex items-center gap-1.5 mb-2">
           <Network className="h-3.5 w-3.5 text-primary" />
-          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">Network</span>
+          <span className="text-[10px] tracking-[0.15em] uppercase text-primary/60 font-semibold">Network</span>
         </div>
 
         {/* Two columns: down / up */}

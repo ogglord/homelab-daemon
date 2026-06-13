@@ -43,7 +43,7 @@ export function TopMemoryWidget() {
         {/* Header row */}
         <div className="flex items-center gap-1.5 mb-2">
           <MemoryStick className="h-3.5 w-3.5 text-success" />
-          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">Top Memory</span>
+          <span className="text-[10px] tracking-[0.15em] uppercase text-primary/60 font-semibold">Top Memory</span>
         </div>
 
         {stats.TopMem?.length ? (

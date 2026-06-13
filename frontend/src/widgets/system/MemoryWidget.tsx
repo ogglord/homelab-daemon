@@ -18,7 +18,7 @@ export function MemoryWidget() {
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-1.5">
             <MemoryStick className="h-3.5 w-3.5 text-success" />
-            <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">Memory</span>
+            <span className="text-[10px] tracking-[0.15em] uppercase text-primary/60 font-semibold">Memory</span>
           </div>
           <span className="text-[10px] font-mono text-muted-fg">{stats.MemTotalStr}</span>
         </div>

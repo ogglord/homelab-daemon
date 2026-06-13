@@ -91,16 +91,23 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-2 pb-12">
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-mono">Overview</span>
+          <h1 className="text-sm font-semibold tracking-[0.2em] uppercase text-fg/60">Overview</h1>
           <PollChip />
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
         {rows.map((row, ri) => (
-          <div key={ri} className="grid grid-cols-1 md:grid-cols-4 gap-2 auto-rows-auto">
+          <div
+            key={ri}
+            className="grid grid-cols-1 md:grid-cols-4 gap-2 auto-rows-auto"
+            style={{
+              animation: `widget-appear 0.35s ease both`,
+              animationDelay: `${ri * 60}ms`,
+            }}
+          >
             {row.items.map((item) => {
               const widget = WIDGETS.find((w) => w.id === item.id);
               if (!widget) return null;

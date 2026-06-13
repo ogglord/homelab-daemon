@@ -40,7 +40,7 @@ export function QbittorrentWidget() {
         <CardContent>
           <div className="flex items-center gap-1.5 mb-2">
             <Download className="h-3.5 w-3.5 text-primary" />
-            <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">Torrents</span>
+            <span className="text-[10px] tracking-[0.15em] uppercase text-primary/60 font-semibold">Torrents</span>
           </div>
           <p className="text-xs text-danger">{stats.error}</p>
         </CardContent>
@@ -54,7 +54,7 @@ export function QbittorrentWidget() {
         {/* Header row */}
         <div className="flex items-center gap-1.5 mb-2">
           <Download className="h-3.5 w-3.5 text-primary" />
-          <span className="text-[10px] tracking-widest uppercase text-muted-fg font-medium">Torrents</span>
+          <span className="text-[10px] tracking-[0.15em] uppercase text-primary/60 font-semibold">Torrents</span>
         </div>
 
         {stats.torrents?.length === 0 ? (
