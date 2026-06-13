@@ -367,6 +367,7 @@ in
           homelab-doctor-report = {
             description = "Homelab post-activation doctor report";
             wantedBy = [ "multi-user.target" ];
+            requires = [ "homelab-daemon.service" ];
             after = [
               "homelab-daemon.service"
               "network-online.target"
@@ -374,6 +375,8 @@ in
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
+              # Wait up to 30s for the daemon socket to appear before running checks.
+              ExecStartPre = "/bin/sh -c 'for i in $(seq 30); do [ -S /run/homelab-daemon/daemon.sock ] && exit 0; sleep 1; done; exit 1'";
               ExecStart = "${pkgs.homelab-daemon}/bin/homelab doctor --json --fail-on-error";
               ExecStopPost = "/bin/sh -c '${pkgs.homelab-daemon}/bin/homelab doctor --json | ${pkgs.homelab-daemon}/bin/homelab doctor notify || true'";
               StandardOutput = "journal";
