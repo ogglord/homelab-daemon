@@ -13,9 +13,11 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"syscall"
 	"text/tabwriter"
 	"time"
+
+	"github.com/ogglord/homelab-daemon/internal/doctor"
+	"github.com/urfave/cli/v2"
 )
 
 const socketPath = "/run/homelab-daemon/daemon.sock"
@@ -30,162 +32,183 @@ var httpClient = &http.Client{
 }
 
 var (
-	Version   = "0.2.0"
-	BuildDate = "2026-05-27"
+	Version   = "0.3.0"
+	BuildDate = "2026-06-13"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
+	app := &cli.App{
+		Name:    "homelab",
+		Usage:   "Manage your homelab services, backups, secrets, and health",
+		Version: fmt.Sprintf("%s (built %s)", Version, BuildDate),
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "json",
+				Usage: "output as JSON",
+			},
+		},
+		Commands: []*cli.Command{
+			servicesCmd(),
+			backupCmd(),
+			secretCmd(),
+			configCmd(),
+			daemonCmd(),
+			doctorCmd(),
+			mergeConfigCmd(),
+		},
+		Action: func(c *cli.Context) error {
+			if c.Args().First() == "" {
+				return cli.ShowAppHelp(c)
+			}
+			return fmt.Errorf("unknown command %q — run 'homelab help'", c.Args().First())
+		},
 	}
 
-	command := os.Args[1]
-	args := os.Args[1:]
-
-	if command == "--version" || command == "-v" || command == "version" {
-		fmt.Printf("homelab CLI version %s (built %s)\n", Version, BuildDate)
-		os.Exit(0)
-	}
-
-	if command == "merge-config" {
-		handleMergeConfig(os.Args[2:])
-		os.Exit(0)
-	}
-
-	if command == "doctor" {
-		handleDoctor()
-		os.Exit(0)
-	}
-
-	if command == "secret" {
-		checkRoot()
-		if len(args) < 2 {
-			printSecretUsage()
-			os.Exit(1)
-		}
-		handleSecret(args[1], args[2:])
-		os.Exit(0)
-	}
-
-	// Support "homelab services <cmd>"
-	if command == "services" {
-		if len(args) < 2 {
-			printUsage()
-			os.Exit(1)
-		}
-		command = args[1]
-		args = args[1:]
-	}
-
-	switch command {
-	case "status":
-		handleStatus()
-	case "start":
-		if len(args) < 2 {
-			fmt.Println("Usage: homelab services start <unit>")
-			os.Exit(1)
-		}
-		handleStart(args[1])
-	case "stop":
-		if len(args) < 2 {
-			fmt.Println("Usage: homelab services stop <unit>")
-			os.Exit(1)
-		}
-		handleStop(args[1])
-	case "restart":
-		if len(args) < 2 {
-			fmt.Println("Usage: homelab services restart <unit>")
-			os.Exit(1)
-		}
-		handleRestart(args[1])
-	case "enable":
-		if len(args) < 2 {
-			fmt.Println("Usage: homelab services enable <unit>")
-			os.Exit(1)
-		}
-		handleEnable(args[1], true)
-	case "disable":
-		if len(args) < 2 {
-			fmt.Println("Usage: homelab services disable <unit>")
-			os.Exit(1)
-		}
-		handleEnable(args[1], false)
-	case "logs":
-		if len(args) < 2 {
-			fmt.Println("Usage: homelab services logs <unit>")
-			os.Exit(1)
-		}
-		handleLogs(args[1])
-
-	default:
-		fmt.Printf("Unknown command: %s\n", command)
-		printUsage()
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func printUsage() {
-	fmt.Printf("homelab CLI version %s (built %s)\n\n", Version, BuildDate)
-	fmt.Println(`Usage: homelab [services] <command> [unit]
+// ── helpers ──────────────────────────────────────────────────────────────────
 
-Commands:
-  status               List status of all managed services
-  start <unit>         Start a service
-  stop <unit>          Stop a service
-  restart <unit>       Restart a service
-  enable <unit>        Enable a service (autostart)
-  disable <unit>       Disable a service
-  logs <unit>          Tail logs for a service
-
-  secret list          List all declared secrets and their status
-  secret set [name]    Set/rotate a secret value (interactive picker if no name)
-
-  doctor               Run diagnostic health and smoke checks
-  version              Print version information
-  merge-config         Merge default service settings into services.yaml`)
+func die(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "Error: "+format+"\n", args...)
+	os.Exit(1)
 }
 
-func handleMergeConfig(args []string) {
-	cmd := exec.Command("homelab-daemon", append([]string{"merge-config"}, args...)...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		os.Exit(1)
+func jsonFlag(c *cli.Context) bool {
+	for _, ctx := range c.Lineage() {
+		if ctx.Bool("json") {
+			return true
+		}
 	}
+	return false
 }
+
+// ── services ─────────────────────────────────────────────────────────────────
 
 type serviceStatus struct {
-	Unit          string   `json:"unit"`
-	Enabled       bool     `json:"enabled"`
-	Active        bool     `json:"active"`
-	UserStopped   bool     `json:"user_stopped"`
-	Restart       string   `json:"restart"`
-	Order         int      `json:"order"`
-	FailureCount  int      `json:"failure_count"`
-	BackoffUntil  string   `json:"backoff_until"`
-	BlockedReason string   `json:"blocked_reason"`
+	Unit          string `json:"unit"`
+	Enabled       bool   `json:"enabled"`
+	Active        bool   `json:"active"`
+	UserStopped   bool   `json:"user_stopped"`
+	Restart       string `json:"restart"`
+	Order         int    `json:"order"`
+	FailureCount  int    `json:"failure_count"`
+	BackoffUntil  string `json:"backoff_until"`
+	BlockedReason string `json:"blocked_reason"`
 }
 
-func handleStatus() {
+func servicesCmd() *cli.Command {
+	return &cli.Command{
+		Name:    "services",
+		Aliases: []string{"s"},
+		Usage:   "Manage homelab services",
+		Subcommands: []*cli.Command{
+			{
+				Name:  "status",
+				Usage: "List status of all managed services",
+				Action: func(c *cli.Context) error {
+					handleStatus(jsonFlag(c))
+					return nil
+				},
+			},
+			{
+				Name:      "start",
+				Usage:     "Start a service",
+				ArgsUsage: "<unit>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab services start <unit>")
+					}
+					handleStart(c.Args().First())
+					return nil
+				},
+			},
+			{
+				Name:      "stop",
+				Usage:     "Stop a service",
+				ArgsUsage: "<unit>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab services stop <unit>")
+					}
+					handleStop(c.Args().First())
+					return nil
+				},
+			},
+			{
+				Name:      "restart",
+				Usage:     "Restart a service",
+				ArgsUsage: "<unit>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab services restart <unit>")
+					}
+					handleRestart(c.Args().First())
+					return nil
+				},
+			},
+			{
+				Name:      "enable",
+				Usage:     "Enable a service (autostart)",
+				ArgsUsage: "<unit>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab services enable <unit>")
+					}
+					handleEnable(c.Args().First(), true)
+					return nil
+				},
+			},
+			{
+				Name:      "disable",
+				Usage:     "Disable a service",
+				ArgsUsage: "<unit>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab services disable <unit>")
+					}
+					handleEnable(c.Args().First(), false)
+					return nil
+				},
+			},
+			{
+				Name:      "logs",
+				Usage:     "Tail logs for a service",
+				ArgsUsage: "<unit>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab services logs <unit>")
+					}
+					handleLogs(c.Args().First())
+					return nil
+				},
+			},
+		},
+	}
+}
+
+func handleStatus(asJSON bool) {
 	resp, err := httpClient.Get("http://unix/api/status")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error contacting daemon: %v\n", err)
-		os.Exit(1)
+		die("contacting daemon: %v", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Daemon returned status %d\n", resp.StatusCode)
-		os.Exit(1)
+		die("daemon returned status %d", resp.StatusCode)
 	}
-
 	var services []serviceStatus
 	if err := json.NewDecoder(resp.Body).Decode(&services); err != nil {
-		fmt.Fprintf(os.Stderr, "Error decoding response: %v\n", err)
-		os.Exit(1)
+		die("decoding response: %v", err)
 	}
-
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(services)
+		return
+	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintln(w, "UNIT\tACTIVE\tENABLED\tFAILURES\tBLOCKED")
 	for _, s := range services {
@@ -197,74 +220,61 @@ func handleStatus() {
 func handleStart(unit string) {
 	resp, err := httpClient.Post(fmt.Sprintf("http://unix/api/start/%s", unit), "application/json", nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error contacting daemon: %v\n", err)
-		os.Exit(1)
+		die("contacting daemon: %v", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Daemon returned status %d\n", resp.StatusCode)
-		os.Exit(1)
+		die("daemon returned status %d", resp.StatusCode)
 	}
-	fmt.Printf("Successfully started %s\n", unit)
+	fmt.Printf("Started %s\n", unit)
 }
 
 func handleStop(unit string) {
 	resp, err := httpClient.Post(fmt.Sprintf("http://unix/api/stop/%s", unit), "application/json", nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error contacting daemon: %v\n", err)
-		os.Exit(1)
+		die("contacting daemon: %v", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Daemon returned status %d\n", resp.StatusCode)
-		os.Exit(1)
+		die("daemon returned status %d", resp.StatusCode)
 	}
-	fmt.Printf("Successfully stopped %s\n", unit)
+	fmt.Printf("Stopped %s\n", unit)
 }
 
 func handleRestart(unit string) {
-	// homelab-dash uses systemctl restart, which is sufficient because
-	// daemon manages user_stopped state; restarting an active process doesn't change intent.
-	cmd := exec.Command("systemctl", "restart", unit)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error restarting service: %v\n", err)
-		os.Exit(1)
+	// Route through daemon socket (consistent with start/stop).
+	resp, err := httpClient.Post(fmt.Sprintf("http://unix/api/restart/%s", unit), "application/json", nil)
+	if err != nil {
+		die("contacting daemon: %v", err)
 	}
-	fmt.Printf("Successfully restarted %s\n", unit)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		die("daemon returned status %d", resp.StatusCode)
+	}
+	fmt.Printf("Restarted %s\n", unit)
 }
 
 func handleEnable(unit string, enable bool) {
 	payload := map[string]bool{"enabled": enable}
 	b, _ := json.Marshal(payload)
-
 	req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("http://unix/api/config/%s", unit), bytes.NewReader(b))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
-		os.Exit(1)
+		die("creating request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error contacting daemon: %v\n", err)
-		os.Exit(1)
+		die("contacting daemon: %v", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Daemon returned status %d\n", resp.StatusCode)
-		os.Exit(1)
+		die("daemon returned status %d", resp.StatusCode)
 	}
-
-	action := "disabled"
+	action := "Disabled"
 	if enable {
-		action = "enabled"
+		action = "Enabled"
 	}
-	fmt.Printf("Successfully %s %s\n", action, unit)
+	fmt.Printf("%s %s\n", action, unit)
 }
 
 func handleLogs(unit string) {
@@ -272,234 +282,93 @@ func handleLogs(unit string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error running journalctl: %v\n", err)
-		os.Exit(1)
+		die("running journalctl: %v", err)
 	}
 }
 
-func handleDoctor() {
-	fmt.Println("🏥 Starting Homelab Diagnostics (homelab doctor)...")
-	fmt.Println("====================================================")
-	time.Sleep(100 * time.Millisecond)
+// ── backup ───────────────────────────────────────────────────────────────────
 
-	allPassed := true
-
-	printResult := func(name string, success bool, details string, recommendation string) {
-		if success {
-			fmt.Printf(" [✔] %s\n", name)
-			if details != "" {
-				fmt.Printf("     %s\n", details)
-			}
-		} else {
-			fmt.Printf(" [✗] %s\n", name)
-			if details != "" {
-				fmt.Printf("     Reason: %s\n", details)
-			}
-			if recommendation != "" {
-				fmt.Printf("     Recommendation: %s\n", recommendation)
-			}
-			allPassed = false
-		}
-	}
-
-	// 1. Daemon Socket reachability
-	_, err := os.Stat(socketPath)
-	if err == nil {
-		printResult("Daemon socket reachable", true, socketPath, "")
-	} else {
-		printResult("Daemon socket reachable", false, fmt.Sprintf("Cannot access socket: %v", err), "Verify homelab-daemon is running with 'systemctl status homelab-daemon.service'.")
-	}
-
-	// 2. Daemon Service Status
-	if isUnitActive("homelab-daemon.service") {
-		printResult("Daemon service is running", true, "homelab-daemon.service is active", "")
-	} else {
-		printResult("Daemon service is running", false, "homelab-daemon.service is inactive", "Start it using 'sudo systemctl start homelab-daemon.service'.")
-	}
-
-	// 3. Postgres Service Status
-	if isUnitActive("postgresql.service") {
-		printResult("Postgres database is running", true, "postgresql.service is active", "")
-	} else {
-		printResult("Postgres database is running", false, "postgresql.service is inactive", "Start it using 'sudo systemctl start postgresql.service'.")
-	}
-
-	// 4. Caddy Service Status
-	if isUnitActive("caddy.service") {
-		printResult("Caddy reverse proxy is running", true, "caddy.service is active", "")
-	} else {
-		printResult("Caddy reverse proxy is running", false, "caddy.service is inactive", "Start it using 'sudo systemctl start caddy.service'.")
-	}
-
-	// 5. Dashboard HTTPS Responsiveness
-	msg, ok := checkDashboard()
-	printResult("Dashboard web response check", ok, msg, "Verify Caddy is running and 'dash.cignl.cc' DNS resolves to this host.")
-
-	// 6. Dashboard SPA page checks — every route returns 200 + valid HTML
-	pagesMsg, pagesOk := checkDashPages()
-	printResult("Dashboard page checks (all routes return 200 + valid HTML)", pagesOk, pagesMsg, "Check Caddy routes and frontend dist in nix store.")
-
-	// 7. Disk Space checks
-	diskMounts := []string{"/", "/cache", "/pool"}
-	var diskDetails []string
-	diskOk := true
-	for _, mnt := range diskMounts {
-		str, ok := checkDiskSpace(mnt)
-		if !ok {
-			diskOk = false
-		}
-		diskDetails = append(diskDetails, str)
-	}
-	printResult("Filesystem capacity checks", diskOk, strings.Join(diskDetails, "\n     "), "Prune unnecessary docker assets, clear system logs, or clean pool restore trees.")
-
-	// 8. Systemd Failed Units Check
-	failedMsg, failedOk := checkFailedUnits()
-	printResult("Failed systemd units check", failedOk, failedMsg, "Run 'systemctl status <unit>' or check journalctl logs to diagnose failed units.")
-
-	fmt.Println("====================================================")
-	if allPassed {
-		fmt.Println("🎉 Everything is healthy! Your homelab is in perfect shape.")
-	} else {
-		fmt.Println("⚠️ Some checks failed. Review recommendations above to troubleshoot.")
+func backupCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "backup",
+		Usage: "Manage backup jobs",
+		Subcommands: []*cli.Command{
+			{
+				Name:  "status",
+				Usage: "Show last-run times for all backup jobs",
+				Action: func(c *cli.Context) error {
+					handleBackupStatus(jsonFlag(c))
+					return nil
+				},
+			},
+			{
+				Name:      "run",
+				Usage:     "Trigger a backup job manually",
+				ArgsUsage: "<unit>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab backup run <unit>")
+					}
+					handleBackupRun(c.Args().First())
+					return nil
+				},
+			},
+		},
 	}
 }
 
-func isUnitActive(unit string) bool {
-	cmd := exec.Command("systemctl", "is-active", unit)
-	err := cmd.Run()
-	return err == nil
-}
-
-func checkDashboard() (string, bool) {
-	return doCheckURL("https://dash.cignl.cc", "")
-}
-
-func checkDashPages() (string, bool) {
-	pages := []string{
-		"",
-		"services",
-		"vms",
-		"backups",
-		"diagnostics",
-		"storage",
-		"secrets",
-	}
-	var failed []string
-	client := http.Client{
-		Timeout: 5 * time.Second,
-	}
-	for _, path := range pages {
-		url := fmt.Sprintf("https://dash.cignl.cc/%s", path)
-		resp, err := client.Get(url)
-		if err != nil {
-			failed = append(failed, fmt.Sprintf("%s: connection failed: %v", url, err))
-			continue
-		}
-		if resp.StatusCode != http.StatusOK {
-			failed = append(failed, fmt.Sprintf("%s: HTTP %d", url, resp.StatusCode))
-			resp.Body.Close()
-			continue
-		}
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if !isHTML(body) {
-			failed = append(failed, fmt.Sprintf("%s: response is not valid HTML (no <html> or <!DOCTYPE>)", url))
-		}
-	}
-	if len(failed) > 0 {
-		return strings.Join(failed, "\n     "), false
-	}
-	return fmt.Sprintf("All %d pages return HTTP 200 with valid HTML", len(pages)), true
-}
-
-func doCheckURL(baseURL, path string) (string, bool) {
-	client := http.Client{
-		Timeout: 5 * time.Second,
-	}
-	url := baseURL
-	if path != "" {
-		url = baseURL + "/" + path
-	}
-	resp, err := client.Get(url)
+func handleBackupStatus(asJSON bool) {
+	resp, err := httpClient.Get("http://unix/api/backups")
 	if err != nil {
-		return fmt.Sprintf("Connection failed: %v", err), false
+		die("contacting daemon: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Sprintf("HTTP %d at %s", resp.StatusCode, url), false
+		die("daemon returned status %d", resp.StatusCode)
 	}
-	return fmt.Sprintf("HTTP 200 OK at %s", url), true
+	var result any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		die("decoding response: %v", err)
+	}
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(result)
+		return
+	}
+	b, _ := json.Marshal(result)
+	var backups []struct {
+		Unit    string `json:"unit"`
+		LastRun string `json:"last_run"`
+		Next    string `json:"next_run"`
+		Enabled bool   `json:"enabled"`
+	}
+	if err := json.Unmarshal(b, &backups); err != nil || len(backups) == 0 {
+		fmt.Println(string(b))
+		return
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "UNIT\tENABLED\tLAST RUN\tNEXT RUN")
+	for _, bk := range backups {
+		fmt.Fprintf(w, "%s\t%v\t%s\t%s\n", bk.Unit, bk.Enabled, bk.LastRun, bk.Next)
+	}
+	w.Flush()
 }
 
-func isHTML(body []byte) bool {
-	s := string(body)
-	return strings.Contains(s, "<html") || strings.Contains(s, "<!DOCTYPE") || strings.Contains(s, "<!doctype")
-}
-
-func checkDiskSpace(path string) (string, bool) {
-	var stat syscall.Statfs_t
-	err := syscall.Statfs(path, &stat)
+func handleBackupRun(unit string) {
+	resp, err := httpClient.Post(fmt.Sprintf("http://unix/api/backups/%s/run", unit), "application/json", nil)
 	if err != nil {
-		return fmt.Sprintf("%s: not mounted or inaccessible (%v)", path, err), false
+		die("contacting daemon: %v", err)
 	}
-	total := stat.Blocks * uint64(stat.Bsize)
-	free := stat.Bfree * uint64(stat.Bsize)
-	used := total - free
-	var pct float64
-	if total > 0 {
-		pct = float64(used) / float64(total) * 100.0
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		die("daemon returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
-	return fmt.Sprintf("%s: %.1f%% used (%s/%s)", path, pct, fmtBytes(used), fmtBytes(total)), pct < 90.0
+	fmt.Printf("Triggered backup: %s\n", unit)
 }
 
-func fmtBytes(b uint64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := uint64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
-}
-
-func printSecretUsage() {
-	fmt.Println(`Usage: homelab secret <command> [name]
-
-Commands:
-  list          List all declared secrets and their status
-  set [name]    Set/rotate a secret value (interactive picker if no name)
-
-Requires sudo privileges.`)
-}
-
-// checkRoot exits if not running as root (sudo).
-func checkRoot() {
-	if os.Geteuid() != 0 {
-		fmt.Fprintln(os.Stderr, "Error: homelab secret requires sudo privileges.")
-		os.Exit(1)
-	}
-}
-
-// readPassword reads a secret value without echoing characters.
-func readPassword(prompt string) (string, error) {
-	fmt.Fprint(os.Stderr, prompt)
-	// Disable terminal echo via stty.
-	if err := exec.Command("stty", "-F", "/dev/tty", "-echo").Run(); err != nil {
-		return "", fmt.Errorf("stty -echo: %w", err)
-	}
-	defer func() { _ = exec.Command("stty", "-F", "/dev/tty", "echo").Run() }()
-
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
-	fmt.Fprintln(os.Stderr)
-	return strings.TrimSpace(line), nil
-}
+// ── secret ───────────────────────────────────────────────────────────────────
 
 type secretEntry struct {
 	Name        string `json:"name"`
@@ -509,42 +378,76 @@ type secretEntry struct {
 	Preview     string `json:"preview"`
 }
 
-func handleSecret(subcommand string, args []string) {
-	switch subcommand {
-	case "list":
-		handleSecretList()
-	case "set":
-		handleSecretSet(args)
-	default:
-		fmt.Printf("Unknown secret command: %s\n", subcommand)
-		printSecretUsage()
-		os.Exit(1)
+func secretCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "secret",
+		Usage: "Manage homelab secrets",
+		Before: func(c *cli.Context) error {
+			sub := c.Args().First()
+			if sub == "add" || sub == "set" {
+				if os.Geteuid() != 0 {
+					return fmt.Errorf("homelab secret %s requires sudo", sub)
+				}
+			}
+			return nil
+		},
+		Subcommands: []*cli.Command{
+			{
+				Name:  "list",
+				Usage: "List all declared secrets and their status",
+				Action: func(c *cli.Context) error {
+					handleSecretList(jsonFlag(c))
+					return nil
+				},
+			},
+			{
+				Name:      "add",
+				Usage:     "Declare and set a new secret",
+				ArgsUsage: "<name>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab secret add <name>")
+					}
+					handleSecretAdd(c.Args().First())
+					return nil
+				},
+			},
+			{
+				Name:      "set",
+				Usage:     "Rotate the value of an existing secret",
+				ArgsUsage: "[name]",
+				Action: func(c *cli.Context) error {
+					handleSecretSet(c.Args().Slice())
+					return nil
+				},
+			},
+		},
 	}
 }
 
-func handleSecretList() {
+func handleSecretList(asJSON bool) {
 	resp, err := httpClient.Get("http://unix/api/secrets")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error contacting daemon: %v\n", err)
-		os.Exit(1)
+		die("contacting daemon: %v", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		fmt.Fprintf(os.Stderr, "Daemon returned status %d: %s\n", resp.StatusCode, strings.TrimSpace(string(body)))
-		os.Exit(1)
+		die("daemon returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
-
 	var result struct {
 		Secrets       []secretEntry `json:"secrets"`
 		DeployPending bool          `json:"deploy_pending"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		fmt.Fprintf(os.Stderr, "Error decoding response: %v\n", err)
-		os.Exit(1)
+		die("decoding response: %v", err)
 	}
-
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(result)
+		return
+	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintln(w, "NAME\tDESCRIPTION\tPRESENT\tMODIFIED")
 	for _, s := range result.Secrets {
@@ -561,20 +464,60 @@ func handleSecretList() {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.Name, s.Description, present, modified)
 	}
 	w.Flush()
-
 	if result.DeployPending {
 		fmt.Println("\n⚠ Deploy pending — run 'nh os switch' to apply secret changes.")
 	}
 }
 
+func handleSecretAdd(name string) {
+	fmt.Printf("Adding new secret: %s\n", name)
+	desc, err := readLine("Description: ")
+	if err != nil {
+		die("reading description: %v", err)
+	}
+	val, err := readPassword(fmt.Sprintf("Value for %s: ", name))
+	if err != nil {
+		die("reading value: %v", err)
+	}
+	if val == "" {
+		die("value must not be empty")
+	}
+	body := map[string]string{"value": val, "description": desc}
+	b, _ := json.Marshal(body)
+	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("http://unix/api/secrets/%s", name), bytes.NewReader(b))
+	if err != nil {
+		die("creating request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		die("contacting daemon: %v", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		die("daemon returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+	var result struct {
+		Success       bool `json:"success"`
+		DeployPending bool `json:"deploy_pending"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		die("decoding response: %v", err)
+	}
+	fmt.Printf("✓ Secret '%s' added.", name)
+	if result.DeployPending {
+		fmt.Println(" Deploy pending — run 'nh os switch' to apply.")
+	} else {
+		fmt.Println()
+	}
+}
+
 func handleSecretSet(args []string) {
 	if len(args) >= 1 && args[0] != "" {
-		// Direct set: homelab secret set <name>
 		setSecretByName(args[0])
 		return
 	}
-
-	// Interactive picker: homelab secret set (no name)
 	name := pickSecretInteractive()
 	if name == "" {
 		return
@@ -585,24 +528,19 @@ func handleSecretSet(args []string) {
 func pickSecretInteractive() string {
 	resp, err := httpClient.Get("http://unix/api/secrets")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error contacting daemon: %v\n", err)
-		os.Exit(1)
+		die("contacting daemon: %v", err)
 	}
 	defer resp.Body.Close()
-
 	var result struct {
 		Secrets []secretEntry `json:"secrets"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		fmt.Fprintf(os.Stderr, "Error decoding response: %v\n", err)
-		os.Exit(1)
+		die("decoding response: %v", err)
 	}
-
 	if len(result.Secrets) == 0 {
 		fmt.Fprintln(os.Stderr, "No secrets registered.")
 		return ""
 	}
-
 	fmt.Println("Select a secret to set:")
 	for i, s := range result.Secrets {
 		status := "✗"
@@ -619,70 +557,50 @@ func pickSecretInteractive() string {
 	}
 	fmt.Println("   q. Quit")
 	fmt.Print("\nChoice: ")
-
 	var input string
 	fmt.Scanln(&input)
-
 	if input == "q" || input == "Q" || input == "" {
 		return ""
 	}
-
 	n, err := strconv.Atoi(input)
 	if err != nil || n < 1 || n > len(result.Secrets) {
 		fmt.Fprintln(os.Stderr, "Invalid selection.")
 		return ""
 	}
-
 	return result.Secrets[n-1].Name
 }
 
 func setSecretByName(name string) {
 	val, err := readPassword(fmt.Sprintf("Value for %s: ", name))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
-		os.Exit(1)
+		die("reading input: %v", err)
 	}
 	if val == "" {
-		fmt.Fprintln(os.Stderr, "Error: value must not be empty.")
-		os.Exit(1)
+		die("value must not be empty")
 	}
-
 	body := map[string]string{"value": val}
-	b, err := json.Marshal(body)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error encoding request: %v\n", err)
-		os.Exit(1)
-	}
-
+	b, _ := json.Marshal(body)
 	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("http://unix/api/secrets/%s", name), bytes.NewReader(b))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
-		os.Exit(1)
+		die("creating request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error contacting daemon: %v\n", err)
-		os.Exit(1)
+		die("contacting daemon: %v", err)
 	}
 	defer resp.Body.Close()
-
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Daemon returned status %d: %s\n", resp.StatusCode, strings.TrimSpace(string(respBody)))
-		os.Exit(1)
+		die("daemon returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
-
 	var result struct {
 		Success       bool `json:"success"`
 		DeployPending bool `json:"deploy_pending"`
 	}
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		fmt.Fprintf(os.Stderr, "Error decoding response: %v\n", err)
-		os.Exit(1)
+		die("decoding response: %v", err)
 	}
-
 	fmt.Printf("✓ Secret '%s' updated.", name)
 	if result.DeployPending {
 		fmt.Println(" Deploy pending — run 'nh os switch' to apply.")
@@ -691,24 +609,210 @@ func setSecretByName(name string) {
 	}
 }
 
-func checkFailedUnits() (string, bool) {
-	cmd := exec.Command("systemctl", "list-units", "--failed", "--plain", "--no-legend")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Sprintf("Failed to check failed units: %v", err), false
+// ── config ───────────────────────────────────────────────────────────────────
+
+func configCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "config",
+		Usage: "Inspect daemon configuration",
+		Subcommands: []*cli.Command{
+			{
+				Name:  "show",
+				Usage: "Dump the current resolved configuration as JSON",
+				Action: func(c *cli.Context) error {
+					handleConfigShow()
+					return nil
+				},
+			},
+		},
 	}
-	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	var failed []string
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			failed = append(failed, line)
+}
+
+func handleConfigShow() {
+	resp, err := httpClient.Get("http://unix/api/config")
+	if err != nil {
+		die("contacting daemon: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		die("daemon returned status %d", resp.StatusCode)
+	}
+	var result any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		die("decoding response: %v", err)
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(result)
+}
+
+// ── daemon ───────────────────────────────────────────────────────────────────
+
+func daemonCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "daemon",
+		Usage: "Inspect daemon process",
+		Subcommands: []*cli.Command{
+			{
+				Name:  "status",
+				Usage: "Lightweight ping to the daemon socket",
+				Action: func(c *cli.Context) error {
+					handleDaemonStatus(jsonFlag(c))
+					return nil
+				},
+			},
+		},
+	}
+}
+
+func handleDaemonStatus(asJSON bool) {
+	_, err := httpClient.Get("http://unix/api/health")
+	if err != nil {
+		if asJSON {
+			fmt.Println(`{"ok":false,"error":"daemon unreachable"}`)
+		} else {
+			fmt.Fprintln(os.Stderr, "✗ Daemon unreachable")
+		}
+		os.Exit(1)
+	}
+	if asJSON {
+		fmt.Println(`{"ok":true}`)
+	} else {
+		fmt.Println("✔ Daemon is running")
+	}
+}
+
+// ── doctor ───────────────────────────────────────────────────────────────────
+
+func doctorCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "doctor",
+		Usage: "Run diagnostic health checks",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "json",
+				Usage: "output report as JSON (always exits 0 unless --fail-on-error)",
+			},
+			&cli.BoolFlag{
+				Name:  "fail-on-error",
+				Usage: "exit 1 if any check fails",
+			},
+			&cli.StringFlag{
+				Name:  "check",
+				Usage: "comma-separated list of check slugs to run (default: all)",
+			},
+		},
+		Subcommands: []*cli.Command{
+			{
+				Name:  "notify",
+				Usage: "Read a JSON doctor report from stdin and send SMTP if failures present",
+				Action: func(c *cli.Context) error {
+					return handleDoctorNotify()
+				},
+			},
+		},
+		Action: func(c *cli.Context) error {
+			return handleDoctor(c)
+		},
+	}
+}
+
+func handleDoctor(c *cli.Context) error {
+	asJSON := c.Bool("json") || jsonFlag(c)
+	failOnError := c.Bool("fail-on-error")
+
+	var slugs []string
+	if raw := c.String("check"); raw != "" {
+		for _, s := range strings.Split(raw, ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				slugs = append(slugs, s)
+			}
 		}
 	}
-	if len(failed) > 0 {
-		return fmt.Sprintf("%d failed systemd unit(s) detected:\n     %s", len(failed), strings.Join(failed, "\n     ")), false
+
+	report := doctor.Run(slugs)
+
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(report)
+	} else {
+		fmt.Println("🏥 Homelab Diagnostics")
+		fmt.Println(strings.Repeat("=", 52))
+		fmt.Print(doctor.FormatReportText(report))
+		fmt.Println(strings.Repeat("=", 52))
+		if report.Failed == 0 {
+			fmt.Println("🎉 All checks passed.")
+		} else {
+			fmt.Printf("⚠️  %d check(s) failed.\n", report.Failed)
+		}
 	}
-	return "No failed systemd units detected", true
+
+	if failOnError && report.Failed > 0 {
+		os.Exit(1)
+	}
+	return nil
+}
+
+func handleDoctorNotify() error {
+	var report doctor.Report
+	if err := json.NewDecoder(os.Stdin).Decode(&report); err != nil {
+		return fmt.Errorf("reading report from stdin: %w", err)
+	}
+	if report.Failed == 0 {
+		return nil
+	}
+	const configPath = "/cache/appdata/homelab/services.yaml"
+	cfg, err := doctor.LoadNotifyConfigFromFile(configPath)
+	if err != nil {
+		return fmt.Errorf("loading notify config: %w", err)
+	}
+	if err := doctor.Notify(report, cfg); err != nil {
+		return fmt.Errorf("sending notification: %w", err)
+	}
+	fmt.Printf("Notification sent: %d check(s) failed\n", report.Failed)
+	return nil
+}
+
+// ── merge-config ─────────────────────────────────────────────────────────────
+
+func mergeConfigCmd() *cli.Command {
+	return &cli.Command{
+		Name:   "merge-config",
+		Usage:  "Merge default service settings into services.yaml",
+		Hidden: true,
+		Action: func(c *cli.Context) error {
+			cmd := exec.Command("homelab-daemon", append([]string{"merge-config"}, c.Args().Slice()...)...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			return cmd.Run()
+		},
+	}
+}
+
+// ── input helpers ────────────────────────────────────────────────────────────
+
+func readLine(prompt string) (string, error) {
+	fmt.Fprint(os.Stderr, prompt)
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(line), nil
+}
+
+func readPassword(prompt string) (string, error) {
+	fmt.Fprint(os.Stderr, prompt)
+	if err := exec.Command("stty", "-F", "/dev/tty", "-echo").Run(); err != nil {
+		return "", fmt.Errorf("stty -echo: %w", err)
+	}
+	defer func() { _ = exec.Command("stty", "-F", "/dev/tty", "echo").Run() }()
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	fmt.Fprintln(os.Stderr)
+	return strings.TrimSpace(line), nil
 }
