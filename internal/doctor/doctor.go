@@ -13,6 +13,7 @@ import (
 )
 
 const socketPath = "/run/homelab-daemon/daemon.sock"
+const systemctlPath = "/run/current-system/sw/bin/systemctl"
 
 // Result is the outcome of a single health check.
 type Result struct {
@@ -133,7 +134,7 @@ func checkCaddy() Result {
 }
 
 func unitResult(unit, okDetail, fix string) Result {
-	cmd := exec.Command("systemctl", "is-active", unit)
+	cmd := exec.Command(systemctlPath, "is-active", unit)
 	if cmd.Run() == nil {
 		return Result{OK: true, Detail: okDetail}
 	}
@@ -237,7 +238,7 @@ func checkDisk() Result {
 }
 
 func checkSystemdUnits() Result {
-	cmd := exec.Command("systemctl", "list-units", "--failed", "--plain", "--no-legend")
+	cmd := exec.Command(systemctlPath, "list-units", "--failed", "--plain", "--no-legend")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
