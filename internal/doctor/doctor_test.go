@@ -1,6 +1,7 @@
 package doctor_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ogglord/homelab-daemon/internal/doctor"
@@ -35,5 +36,26 @@ func TestRunUnknownCheck(t *testing.T) {
 	}
 	if report.Results[0].OK {
 		t.Error("unknown check should not be OK")
+	}
+}
+
+func TestFormatReport(t *testing.T) {
+	report := doctor.Report{
+		Passed: 1,
+		Failed: 1,
+		Results: []doctor.Result{
+			{Name: "socket", OK: true, Detail: "/run/homelab-daemon/daemon.sock"},
+			{Name: "daemon", OK: false, Detail: "inactive", Fix: "sudo systemctl start homelab-daemon.service"},
+		},
+	}
+	body := doctor.FormatReportText(report)
+	if !strings.Contains(body, "[✔] socket") {
+		t.Errorf("expected passing check in output, got:\n%s", body)
+	}
+	if !strings.Contains(body, "[✗] daemon") {
+		t.Errorf("expected failing check in output, got:\n%s", body)
+	}
+	if !strings.Contains(body, "Fix:") {
+		t.Errorf("expected Fix hint in output, got:\n%s", body)
 	}
 }
