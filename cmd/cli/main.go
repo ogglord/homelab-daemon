@@ -790,13 +790,11 @@ func completionCmd() *cli.Command {
 				Action: func(c *cli.Context) error {
 					fmt.Println(`# Add to ~/.bashrc:
 # eval "$(homelab completion bash)"
-_homelab_completion() {
-    local cur prev words cword
-    _init_completion || return
-    COMPREPLY=($(COMP_LINE="${COMP_LINE}" COMP_POINT="${COMP_POINT}" homelab --generate-bash-completion))
+_homelab() {
+    COMPREPLY=($(homelab "${COMP_WORDS[@]:1}" --generate-bash-completion 2>/dev/null))
     return 0
 }
-complete -F _homelab_completion homelab`)
+complete -F _homelab homelab`)
 					return nil
 				},
 			},
@@ -805,10 +803,11 @@ complete -F _homelab_completion homelab`)
 				Usage: "Generate zsh completion script",
 				Action: func(c *cli.Context) error {
 					fmt.Println(`# Add to ~/.zshrc:
+# autoload -U compinit && compinit  (required once in ~/.zshrc)
 # eval "$(homelab completion zsh)"
 _homelab() {
     local -a completions
-    completions=($(COMP_LINE="${COMP_LINE}" COMP_POINT="${COMP_POINT}" homelab --generate-bash-completion))
+    completions=(${(f)"$(homelab ${words[2,-1]} --generate-bash-completion 2>/dev/null)"})
     compadd -a completions
 }
 compdef _homelab homelab`)
