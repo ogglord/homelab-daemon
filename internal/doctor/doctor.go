@@ -145,12 +145,7 @@ func unitResult(unit, okDetail, fix string) Result {
 }
 
 func dashboardBaseURL() string {
-	// Attempt to read from daemon API; fall back to hardcoded default.
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get("http://unix/api/config")
-	if err == nil {
-		resp.Body.Close()
-	}
+	// TODO: read from daemon config once /api/config exposes the dashboard URL.
 	return "https://dash.cignl.cc"
 }
 

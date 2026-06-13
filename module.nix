@@ -289,7 +289,7 @@ in
     system.activationScripts.homelabDoctor = lib.mkIf cfg.enableDoctorOnActivation {
       deps = [ "specialfs" ];
       text = ''
-        ${pkgs.homelab-daemon}/bin/homelab doctor --json 2>&1 \
+        ${pkgs.homelab-daemon}/bin/homelab doctor --json --check disk,systemd-units 2>&1 \
           | ${pkgs.systemd}/bin/systemd-cat -t homelab-doctor -p info || true
       '';
     };

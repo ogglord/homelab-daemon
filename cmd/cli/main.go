@@ -666,7 +666,7 @@ func daemonCmd() *cli.Command {
 }
 
 func handleDaemonStatus(asJSON bool) {
-	_, err := httpClient.Get("http://unix/api/health")
+	resp, err := httpClient.Get("http://unix/api/health")
 	if err != nil {
 		if asJSON {
 			fmt.Println(`{"ok":false,"error":"daemon unreachable"}`)
@@ -675,6 +675,7 @@ func handleDaemonStatus(asJSON bool) {
 		}
 		os.Exit(1)
 	}
+	defer resp.Body.Close()
 	if asJSON {
 		fmt.Println(`{"ok":true}`)
 	} else {
