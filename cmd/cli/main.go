@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"net/smtp"
 	"sort"
 	"strconv"
 	"strings"
@@ -56,6 +57,7 @@ func main() {
 			configCmd(),
 			daemonCmd(),
 			doctorCmd(),
+			notifyCmd(),
 			updateCmd(),
 			storageCmd(),
 			vmCmd(),
@@ -779,6 +781,56 @@ func handleDoctorNotify() error {
 		return fmt.Errorf("sending notification: %w", err)
 	}
 	fmt.Printf("Notification sent: %d check(s) failed\n", report.Failed)
+	return nil
+}
+
+// ── notify ───────────────────────────────────────────────────────────────────
+
+func notifyCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "notify",
+		Usage: "Test and manage notifications",
+		Subcommands: []*cli.Command{
+			{
+				Name:  "test",
+				Usage: "Send a test SMTP notification to verify email delivery",
+				Action: func(c *cli.Context) error {
+					return handleNotifyTest()
+				},
+			},
+		},
+	}
+}
+
+func handleNotifyTest() error {
+	const configPath = "/cache/appdata/homelab/services.yaml"
+	cfg, err := doctor.LoadNotifyConfigFromFile(configPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	if cfg.SMTPHost == "" {
+		return fmt.Errorf("SMTP not configured in %s", configPath)
+	}
+	return sendTestEmail(cfg)
+}
+
+func sendTestEmail(cfg doctor.NotifyConfig) error {
+	hostname := cfg.Hostname
+	if hostname == "" {
+		hostname = "homelab"
+	}
+	subject := fmt.Sprintf("[homelab] Test notification from %s", hostname)
+	body := fmt.Sprintf("This is a test notification sent from the homelab CLI on %s.\n\nIf you received this, SMTP is configured correctly.", hostname)
+	msg := fmt.Sprintf(
+		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
+		cfg.From, cfg.To, subject, body,
+	)
+	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
+	auth := smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPassword, cfg.SMTPHost)
+	if err := smtp.SendMail(addr, auth, cfg.From, strings.Split(cfg.To, ","), []byte(msg)); err != nil {
+		return fmt.Errorf("send failed: %w", err)
+	}
+	fmt.Printf("✔ Test email sent to %s\n", cfg.To)
 	return nil
 }
 
