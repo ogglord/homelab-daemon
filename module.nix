@@ -1,4 +1,9 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 # homelab-daemon — NixOS module.
 #
@@ -16,78 +21,77 @@
 
 let
   cfg = config.services.homelab-daemon;
-  pkg = pkgs.homelab-daemon;       # combined daemon + CLI
+  pkg = pkgs.homelab-daemon; # combined daemon + CLI
   cliPkg = pkgs.homelab-daemon-cli;
   frontendPkg = pkgs.homelab-frontend;
 
-  isPodman    = key: lib.hasPrefix "podman-" key;
+  isPodman = key: lib.hasPrefix "podman-" key;
   toContainer = key: lib.removePrefix "podman-" key;
-  toUnit      = key: key + ".service";
+  toUnit = key: key + ".service";
 
-  sortedServices = lib.sort
-    (a: b: if a.order != b.order then a.order < b.order else a.key < b.key)
-    (lib.mapAttrsToList (key: svcCfg: { inherit key; } // svcCfg) cfg.managedServices);
+  sortedServices = lib.sort (a: b: if a.order != b.order then a.order < b.order else a.key < b.key) (
+    lib.mapAttrsToList (key: svcCfg: { inherit key; } // svcCfg) cfg.managedServices
+  );
 
-  yamlEntry = svc:
+  yamlEntry =
+    svc:
     "  - unit: ${toUnit svc.key}\n"
     + "    enabled: true\n"
     + "    order: ${toString svc.order}\n"
     + "    boot_delay: ${toString svc.bootDelay}\n"
     + "    restart: ${svc.restart}\n"
     + "    restart_delay: ${toString svc.restartDelay}\n"
-    + lib.optionalString (svc.dependsOn != []) (
-        "    depends_on:\n"
-        + lib.concatMapStrings (dep: "      - ${dep}\n") svc.dependsOn
-      )
-    + lib.optionalString (svc.requiresMounts != []) (
-        "    requires_mount:\n"
-        + lib.concatMapStrings (mnt: "      - ${mnt}\n") svc.requiresMounts
-      )
+    + lib.optionalString (svc.dependsOn != [ ]) (
+      "    depends_on:\n" + lib.concatMapStrings (dep: "      - ${dep}\n") svc.dependsOn
+    )
+    + lib.optionalString (svc.requiresMounts != [ ]) (
+      "    requires_mount:\n" + lib.concatMapStrings (mnt: "      - ${mnt}\n") svc.requiresMounts
+    )
     + lib.optionalString (svc.icon != null) "    icon_url: ${lib.escapeShellArg svc.icon}\n"
     + lib.optionalString (svc.homepage != null) "    homepage_url: ${lib.escapeShellArg svc.homepage}\n"
     + "\n";
 
-  yamlBackupEntry = key: backupCfg:
+  yamlBackupEntry =
+    key: backupCfg:
     "  - unit: ${toUnit key}\n"
     + "    enabled: true\n"
     + "    schedule: \"${backupCfg.schedule}\"\n"
-    + lib.optionalString (backupCfg.dependsOn != []) (
-        "    depends_on:\n"
-        + lib.concatMapStrings (dep: "      - ${dep}\n") backupCfg.dependsOn
-      )
-    + lib.optionalString (backupCfg.requiresMounts != []) (
-        "    requires_mount:\n"
-        + lib.concatMapStrings (mnt: "      - ${mnt}\n") backupCfg.requiresMounts
-      )
+    + lib.optionalString (backupCfg.dependsOn != [ ]) (
+      "    depends_on:\n" + lib.concatMapStrings (dep: "      - ${dep}\n") backupCfg.dependsOn
+    )
+    + lib.optionalString (backupCfg.requiresMounts != [ ]) (
+      "    requires_mount:\n" + lib.concatMapStrings (mnt: "      - ${mnt}\n") backupCfg.requiresMounts
+    )
     + "\n";
 
   defaultServicesYaml = ''
-# homelab-daemon — service orchestration config
-# Generated from managedServices declarations. Edit freely.
-version: 1
-services:
+    # homelab-daemon — service orchestration config
+    # Generated from managedServices declarations. Edit freely.
+    version: 1
+    services:
 
-''
-    + lib.concatMapStrings yamlEntry sortedServices
-    + lib.optionalString (cfg.managedBackups != {}) (
-        "\nbackups:\n\n"
-        + lib.concatStrings (lib.mapAttrsToList yamlBackupEntry cfg.managedBackups)
-      )
-    + lib.optionalString (cfg.notify.smtp.host != "") (
-        "\nnotify:\n"
-        + "  smtp:\n"
-        + "    host: ${lib.escapeNixString cfg.notify.smtp.host}\n"
-        + "    port: ${toString cfg.notify.smtp.port}\n"
-        + "    username: ${lib.escapeNixString cfg.notify.smtp.username}\n"
-        + "    password: ${lib.escapeNixString cfg.notify.smtp.password}\n"
-        + "  from: ${lib.escapeNixString cfg.notify.from}\n"
-        + "  to: ${lib.escapeNixString cfg.notify.to}\n"
-      );
+  ''
+  + lib.concatMapStrings yamlEntry sortedServices
+  + lib.optionalString (cfg.managedBackups != { }) (
+    "\nbackups:\n\n" + lib.concatStrings (lib.mapAttrsToList yamlBackupEntry cfg.managedBackups)
+  )
+  + lib.optionalString (cfg.notify.smtp.host != "") (
+    "\nnotify:\n"
+    + "  smtp:\n"
+    + "    host: ${lib.escapeNixString cfg.notify.smtp.host}\n"
+    + "    port: ${toString cfg.notify.smtp.port}\n"
+    + "    username: ${lib.escapeNixString cfg.notify.smtp.username}\n"
+    + "    password: ${lib.escapeNixString cfg.notify.smtp.password}\n"
+    + "  from: ${lib.escapeNixString cfg.notify.from}\n"
+    + "  to: ${lib.escapeNixString cfg.notify.to}\n"
+  );
 
 in
 {
   options.services.homelab-daemon = {
-    enable = lib.mkEnableOption "homelab service orchestrator" // { default = true; };
+    enable = lib.mkEnableOption "homelab service orchestrator" // {
+      default = true;
+    };
 
     enableManagedServices = lib.mkOption {
       type = lib.types.bool;
@@ -166,7 +170,7 @@ in
           };
         };
       };
-      default = {};
+      default = { };
       description = ''
         SMTP notification settings. When configured, the daemon sends email
         alerts for failed backup jobs, service failures, and daemon crashes.
@@ -174,43 +178,86 @@ in
     };
 
     managedServices = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.submodule {
-        options = {
-          order = lib.mkOption { type = lib.types.int; default = 10; };
-          bootDelay = lib.mkOption { type = lib.types.int; default = 0; };
-          restart = lib.mkOption {
-            type = lib.types.enum [ "no" "on-failure" "unless-stopped" "always" ];
-            default = "unless-stopped";
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          options = {
+            order = lib.mkOption {
+              type = lib.types.int;
+              default = 10;
+            };
+            bootDelay = lib.mkOption {
+              type = lib.types.int;
+              default = 0;
+            };
+            restart = lib.mkOption {
+              type = lib.types.enum [
+                "no"
+                "on-failure"
+                "unless-stopped"
+                "always"
+              ];
+              default = "unless-stopped";
+            };
+            restartDelay = lib.mkOption {
+              type = lib.types.int;
+              default = 10;
+            };
+            dependsOn = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [ ];
+            };
+            requiresMounts = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [ ];
+            };
+            icon = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "URL to an icon SVG for this service (e.g. https://selfh.st/icons/immich.svg).";
+            };
+            homepage = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "Homepage URL for this service (e.g. https://immich.cignl.cc).";
+            };
           };
-          restartDelay = lib.mkOption { type = lib.types.int; default = 10; };
-          dependsOn = lib.mkOption { type = lib.types.listOf lib.types.str; default = []; };
-          requiresMounts = lib.mkOption { type = lib.types.listOf lib.types.str; default = []; };
-          icon = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            description = "URL to an icon SVG for this service (e.g. https://selfh.st/icons/immich.svg).";
-          };
-          homepage = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            description = "Homepage URL for this service (e.g. https://immich.cignl.cc).";
-          };
-        };
-      });
-      default = {};
+        }
+      );
+      default = { };
       description = "Services managed by the daemon.";
     };
 
     managedBackups = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.submodule {
-        options = {
-          schedule = lib.mkOption { type = lib.types.str; default = "0 4 * * *"; };
-          dependsOn = lib.mkOption { type = lib.types.listOf lib.types.str; default = []; };
-          requiresMounts = lib.mkOption { type = lib.types.listOf lib.types.str; default = []; };
-        };
-      });
-      default = {};
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          options = {
+            schedule = lib.mkOption {
+              type = lib.types.str;
+              default = "0 4 * * *";
+            };
+            dependsOn = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [ ];
+            };
+            requiresMounts = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [ ];
+            };
+          };
+        }
+      );
+      default = { };
       description = "Backup jobs managed by the daemon.";
+    };
+
+    enableDoctorOnActivation = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Run `homelab doctor` after each NixOS activation (nh os switch).
+        Results are written to the journal (tag: homelab-doctor).
+        Failures emit an SMTP notification but never block the switch.
+      '';
     };
   };
 
@@ -225,7 +272,7 @@ in
       description = "Homelab service daemon";
       shell = pkgs.bashInteractive;
     };
-    users.groups.homelab-daemon = {};
+    users.groups.homelab-daemon = { };
 
     # Allow caddy to connect to the daemon unix socket.
     users.users.caddy.extraGroups = lib.mkIf (config.services.caddy.enable or false) [
@@ -239,6 +286,14 @@ in
       fi
     '';
 
+    system.activationScripts.homelabDoctor = lib.mkIf cfg.enableDoctorOnActivation {
+      deps = [ "specialfs" ];
+      text = ''
+        ${pkgs.homelab-daemon}/bin/homelab doctor --json 2>&1 \
+          | ${pkgs.systemd}/bin/systemd-cat -t homelab-doctor -p info || true
+      '';
+    };
+
     # ── Validation ─────────────────────────────────────────────────────
     assertions = lib.mkIf cfg.enableManagedServices (
       (lib.mapAttrsToList (key: _: {
@@ -247,7 +302,7 @@ in
       }) cfg.managedServices)
 
       ++ (lib.mapAttrsToList (key: _: {
-        assertion = (config.systemd.services.${key}.serviceConfig or {}) != {};
+        assertion = (config.systemd.services.${key}.serviceConfig or { }) != { };
         message = "homelab-daemon: managedServices.\"${key}\" does not match any real systemd service.";
       }) (lib.filterAttrs (key: _: !isPodman key) cfg.managedServices))
 
@@ -262,62 +317,96 @@ in
 
     system.activationScripts.homelab-daemon-config = {
       text = ''
-        mkdir -p "$(dirname ${lib.escapeShellArg cfg.configFile})"
-        chown homelab-daemon:homelab-daemon "$(dirname ${lib.escapeShellArg cfg.configFile})"
-        TMP_DEFAULT=$(mktemp)
-        cat > "$TMP_DEFAULT" <<'YAML'
-${defaultServicesYaml}
-YAML
-        ${pkg}/bin/homelab-daemon merge-config \
-          --config ${lib.escapeShellArg cfg.configFile} \
-          --defaults "$TMP_DEFAULT"
-        rm -f "$TMP_DEFAULT"
-        chown homelab-daemon:homelab-daemon ${lib.escapeShellArg cfg.configFile}
+                mkdir -p "$(dirname ${lib.escapeShellArg cfg.configFile})"
+                chown homelab-daemon:homelab-daemon "$(dirname ${lib.escapeShellArg cfg.configFile})"
+                TMP_DEFAULT=$(mktemp)
+                cat > "$TMP_DEFAULT" <<'YAML'
+        ${defaultServicesYaml}
+        YAML
+                ${pkg}/bin/homelab-daemon merge-config \
+                  --config ${lib.escapeShellArg cfg.configFile} \
+                  --defaults "$TMP_DEFAULT"
+                rm -f "$TMP_DEFAULT"
+                chown homelab-daemon:homelab-daemon ${lib.escapeShellArg cfg.configFile}
       '';
     };
 
     # ── Managed-units registry ─────────────────────────────────────────
     environment.etc."homelab-daemon/managed-units" = lib.mkIf cfg.enableManagedServices {
-      text = lib.concatMapStrings (key: toUnit key + "\n")
-        (lib.sort lib.lessThan (lib.attrNames cfg.managedServices ++ lib.attrNames cfg.managedBackups));
+      text = lib.concatMapStrings (key: toUnit key + "\n") (
+        lib.sort lib.lessThan (lib.attrNames cfg.managedServices ++ lib.attrNames cfg.managedBackups)
+      );
       mode = "0444";
     };
 
     # ── Systemd: lifecycle overrides + daemon service ──────────────────
-    systemd.services = let
-      managedOverrides = lib.mapAttrs' (key: _:
-        lib.nameValuePair key {
-          wantedBy = lib.mkForce [];
-          restartIfChanged = false;
-          stopIfChanged = false;
-        }
-      ) cfg.managedServices;
+    systemd.services =
+      let
+        managedOverrides = lib.mapAttrs' (
+          key: _:
+          lib.nameValuePair key {
+            wantedBy = lib.mkForce [ ];
+            restartIfChanged = false;
+            stopIfChanged = false;
+          }
+        ) cfg.managedServices;
 
-      backupOverrides = lib.mapAttrs' (key: _:
-        lib.nameValuePair key {
-          wantedBy = lib.mkForce [];
-          restartIfChanged = false;
-          stopIfChanged = false;
-        }
-      ) cfg.managedBackups;
-    in
+        backupOverrides = lib.mapAttrs' (
+          key: _:
+          lib.nameValuePair key {
+            wantedBy = lib.mkForce [ ];
+            restartIfChanged = false;
+            stopIfChanged = false;
+          }
+        ) cfg.managedBackups;
+      in
       lib.mkMerge ([
         (lib.mkIf cfg.enableManagedServices managedOverrides)
         (lib.mkIf cfg.enableManagedServices backupOverrides)
+        (lib.mkIf cfg.enableDoctorOnActivation {
+          homelab-doctor-report = {
+            description = "Homelab post-activation doctor report";
+            wantedBy = [ "multi-user.target" ];
+            after = [
+              "homelab-daemon.service"
+              "network-online.target"
+            ];
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              ExecStart = "${pkgs.homelab-daemon}/bin/homelab doctor --json --fail-on-error";
+              ExecStopPost = "/bin/sh -c '${pkgs.homelab-daemon}/bin/homelab doctor --json | ${pkgs.homelab-daemon}/bin/homelab doctor notify || true'";
+              StandardOutput = "journal";
+              StandardError = "journal";
+              SyslogIdentifier = "homelab-doctor";
+            };
+          };
+        })
         {
           homelab-daemon = {
             description = "Homelab service orchestrator";
             wantedBy = [ "multi-user.target" ];
             after = [ "network.target" ];
             path = with pkgs; [
-              bash util-linux bcachefs-tools systemd podman skopeo
-              git openssh smartmontools sops age nix nh pi-coding-agent
+              bash
+              util-linux
+              bcachefs-tools
+              systemd
+              podman
+              skopeo
+              git
+              openssh
+              smartmontools
+              sops
+              age
+              nix
+              nh
+              pi-coding-agent
               sandbox-runtime
             ];
             serviceConfig = {
-              ExecStart = "${pkg}/bin/homelab-daemon"
-                + " --config ${cfg.configFile}"
-                + " --state-dir ${cfg.stateDir}";
+              ExecStart =
+                "${pkg}/bin/homelab-daemon" + " --config ${cfg.configFile}" + " --state-dir ${cfg.stateDir}";
               Restart = "on-failure";
               RestartSec = "5s";
               RuntimeDirectory = "homelab-daemon";
@@ -328,7 +417,11 @@ YAML
               User = "root";
               Group = "homelab-daemon";
               LockPersonality = true;
-              RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_NETLINK" ];
+              RestrictAddressFamilies = [
+                "AF_UNIX"
+                "AF_INET"
+                "AF_NETLINK"
+              ];
             };
           };
         }
@@ -336,9 +429,9 @@ YAML
 
     # ── Podman autoStart suppression ───────────────────────────────────
     virtualisation.oci-containers.containers = lib.mkIf cfg.enableManagedServices (
-      lib.mapAttrs' (key: _:
-        lib.nameValuePair (toContainer key) { autoStart = lib.mkForce false; }
-      ) (lib.filterAttrs (key: _: isPodman key) cfg.managedServices)
+      lib.mapAttrs' (key: _: lib.nameValuePair (toContainer key) { autoStart = lib.mkForce false; }) (
+        lib.filterAttrs (key: _: isPodman key) cfg.managedServices
+      )
     );
 
     # ── Firewall ───────────────────────────────────────────────────────
