@@ -55,6 +55,7 @@ func main() {
 			configCmd(),
 			daemonCmd(),
 			doctorCmd(),
+			updateCmd(),
 			storageCmd(),
 			vmCmd(),
 			deployCmd(),
@@ -777,6 +778,108 @@ func handleDoctorNotify() error {
 		return fmt.Errorf("sending notification: %w", err)
 	}
 	fmt.Printf("Notification sent: %d check(s) failed\n", report.Failed)
+	return nil
+}
+
+// ── updates ──────────────────────────────────────────────────────────────────
+
+func updateCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "update",
+		Usage: "Check for container image updates",
+		Subcommands: []*cli.Command{
+			{
+				Name:  "status",
+				Usage: "Show available container image updates",
+				Action: func(c *cli.Context) error {
+					handleUpdateStatus(jsonFlag(c))
+					return nil
+				},
+			},
+			{
+				Name:  "check",
+				Usage: "Trigger a fresh update check",
+				Action: func(c *cli.Context) error {
+					return handleUpdateCheck()
+				},
+			},
+		},
+	}
+}
+
+func handleUpdateStatus(asJSON bool) {
+	resp, err := httpClient.Get("http://unix/api/updates")
+	if err != nil {
+		die("contacting daemon: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		die("daemon returned status %d", resp.StatusCode)
+	}
+	var payload struct {
+		Updates map[string]struct {
+			HasUpdate      bool   `json:"has_update"`
+			CurrentVersion string `json:"current_version"`
+			RemoteVersion  string `json:"remote_version"`
+		} `json:"updates"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		die("decoding response: %v", err)
+	}
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(payload)
+		return
+	}
+	if len(payload.Updates) == 0 {
+		fmt.Println("No container update info available.")
+		return
+	}
+	// Collect entries with updates first, then rest.
+	type entry struct {
+		name string
+		u    struct {
+			HasUpdate      bool   `json:"has_update"`
+			CurrentVersion string `json:"current_version"`
+			RemoteVersion  string `json:"remote_version"`
+		}
+	}
+	var withUpdate, noUpdate []entry
+	for name, u := range payload.Updates {
+		e := entry{name: name, u: u}
+		if u.HasUpdate {
+			withUpdate = append(withUpdate, e)
+		} else {
+			noUpdate = append(noUpdate, e)
+		}
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "CONTAINER\tCURRENT\tNEWEST\tAVAILABLE")
+	for _, e := range withUpdate {
+		fmt.Fprintf(w, "%s\t%s\t%s\t✔\n", e.name, e.u.CurrentVersion, e.u.RemoteVersion)
+	}
+	for _, e := range noUpdate {
+		fmt.Fprintf(w, "%s\t%s\t%s\t-\n", e.name, e.u.CurrentVersion, e.u.RemoteVersion)
+	}
+	w.Flush()
+	if len(withUpdate) > 0 {
+		fmt.Printf("\n%d update(s) available.\n", len(withUpdate))
+	} else {
+		fmt.Println("\nAll containers up to date.")
+	}
+}
+
+func handleUpdateCheck() error {
+	resp, err := httpClient.Post("http://unix/api/updates/check", "application/json", nil)
+	if err != nil {
+		return fmt.Errorf("contacting daemon: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("daemon returned status %d", resp.StatusCode)
+	}
+	fmt.Println("✔ Update check triggered.")
 	return nil
 }
 
