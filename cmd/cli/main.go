@@ -55,6 +55,7 @@ func main() {
 			configCmd(),
 			daemonCmd(),
 			doctorCmd(),
+			vmCmd(),
 			deployCmd(),
 			completionCmd(),
 			mergeConfigCmd(),
@@ -775,6 +776,130 @@ func handleDoctorNotify() error {
 		return fmt.Errorf("sending notification: %w", err)
 	}
 	fmt.Printf("Notification sent: %d check(s) failed\n", report.Failed)
+	return nil
+}
+
+// ── vm ───────────────────────────────────────────────────────────────────────
+
+type vmInfo struct {
+	Name   string `json:"name"`
+	State  string `json:"state"`
+	Memory string `json:"memory"`
+	CPUs   uint   `json:"cpus"`
+}
+
+func vmCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "vm",
+		Usage: "Manage virtual machines",
+		Subcommands: []*cli.Command{
+			{
+				Name:  "list",
+				Usage: "List all virtual machines and their state",
+				Action: func(c *cli.Context) error {
+					handleVMList(jsonFlag(c))
+					return nil
+				},
+			},
+			{
+				Name:      "start",
+				Usage:     "Start a VM",
+				ArgsUsage: "<name>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab vm start <name>")
+					}
+					return handleVMAction(c.Args().First(), "start")
+				},
+			},
+			{
+				Name:      "shutdown",
+				Usage:     "Gracefully shut down a VM",
+				ArgsUsage: "<name>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab vm shutdown <name>")
+					}
+					return handleVMAction(c.Args().First(), "shutdown")
+				},
+			},
+			{
+				Name:      "suspend",
+				Usage:     "Suspend (pause) a VM",
+				ArgsUsage: "<name>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab vm suspend <name>")
+					}
+					return handleVMAction(c.Args().First(), "suspend")
+				},
+			},
+			{
+				Name:      "resume",
+				Usage:     "Resume a suspended VM",
+				ArgsUsage: "<name>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: homelab vm resume <name>")
+					}
+					return handleVMAction(c.Args().First(), "resume")
+				},
+			},
+		},
+	}
+}
+
+func handleVMList(asJSON bool) {
+	resp, err := httpClient.Get("http://unix/api/vms")
+	if err != nil {
+		die("contacting daemon: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		die("daemon returned status %d", resp.StatusCode)
+	}
+	var vms []vmInfo
+	if err := json.NewDecoder(resp.Body).Decode(&vms); err != nil {
+		die("decoding response: %v", err)
+	}
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(vms)
+		return
+	}
+	if len(vms) == 0 {
+		fmt.Println("No VMs found.")
+		return
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAME\tSTATE\tMEMORY\tCPUs")
+	for _, v := range vms {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\n", v.Name, v.State, v.Memory, v.CPUs)
+	}
+	w.Flush()
+}
+
+func handleVMAction(name, action string) error {
+	resp, err := httpClient.Post(
+		fmt.Sprintf("http://unix/api/vms/%s/%s", name, action),
+		"application/json", nil,
+	)
+	if err != nil {
+		return fmt.Errorf("contacting daemon: %w", err)
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Success bool   `json:"success"`
+		Error   string `json:"error,omitempty"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("decoding response: %w", err)
+	}
+	if !result.Success {
+		return fmt.Errorf("VM action failed: %s", result.Error)
+	}
+	fmt.Printf("✔ VM %s: %s\n", name, action)
 	return nil
 }
 
