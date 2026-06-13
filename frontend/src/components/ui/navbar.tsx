@@ -155,7 +155,7 @@ const Navbar = ({
         isSticky && "sticky top-0 z-40",
         placement === "top" && intent === "float" && "md:pt-8",
         placement === "bottom" && intent === "float" && "bottom-0 md:pb-8",
-        intent === "float" && "mx-auto w-full max-w-screen-2xl px-4 xl:max-w-(--breakpoint-2xl)",
+        intent === "float" && "mx-auto w-full max-w-screen-xl px-4",
       ])}
       {...props}
     >
@@ -163,7 +163,7 @@ const Navbar = ({
         className={twMerge(
           "relative isolate hidden py-(--navbar-gutter) [--navbar-gutter:--spacing(2.5)] md:block",
           intent === "float" &&
-            "rounded-xl bg-bg py-0 *:data-[navbar=content]:max-w-screen-2xl *:data-[navbar=content]:rounded-xl *:data-[navbar=content]:border *:data-[navbar=content]:bg-navbar *:data-[navbar=content]:px-4 *:data-[navbar=content]:py-(--navbar-gutter) *:data-[navbar=content]:shadow-xs",
+            "rounded-xl bg-bg py-0 *:data-[navbar=content]:max-w-screen-xl *:data-[navbar=content]:rounded-xl *:data-[navbar=content]:border *:data-[navbar=content]:bg-navbar *:data-[navbar=content]:px-4 *:data-[navbar=content]:py-(--navbar-gutter) *:data-[navbar=content]:shadow-xs",
           ["default", "inset"].includes(intent) && "px-4",
           intent === "default" && "border-b bg-navbar",
           className,
@@ -171,7 +171,7 @@ const Navbar = ({
       >
         <div
           data-navbar="content"
-          className="mx-auto w-full max-w-(--breakpoint-2xl) items-center md:flex"
+          className="mx-auto w-full max-w-screen-xl items-center md:flex"
         >
           {children}
         </div>
@@ -292,7 +292,7 @@ const NavbarInset = ({ className, ref, children, ...props }: React.ComponentProp
       {...props}
     >
       <div className="grow bg-bg p-6 md:rounded-lg md:p-16 md:shadow-xs md:ring-1 md:ring-fg/15 md:dark:bg-navbar md:dark:ring-border md:dark:group-has-data-navbar-inset/navbar:bg-muted">
-        <div className="mx-auto max-w-screen-2xl">{children}</div>
+        <div className="mx-auto max-w-screen-xl">{children}</div>
       </div>
     </div>
   )

@@ -10,7 +10,7 @@ export default function AppLayout() {
       <AppNavbar navItems={navItems} />
 
       <motion.main
-        className="mx-auto w-full max-w-screen-2xl px-4 py-6 sm:py-12"
+        className="mx-auto w-full max-w-screen-xl px-6 py-6 sm:py-12"
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25, ease: "easeOut" }}
