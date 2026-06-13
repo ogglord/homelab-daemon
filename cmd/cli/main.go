@@ -9,9 +9,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/smtp"
 	"os"
 	"os/exec"
-	"net/smtp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1151,7 +1151,11 @@ func handleVMAction(name, action string) error {
 		return fmt.Errorf("decoding response: %w", err)
 	}
 	if !result.Success {
-		return fmt.Errorf("VM action failed: %s", result.Error)
+		msg := result.Error
+		if msg == "" {
+			msg = "daemon reported failure (no message)"
+		}
+		return fmt.Errorf("VM action failed: %s", msg)
 	}
 	fmt.Printf("✔ VM %s: %s\n", name, action)
 	return nil
@@ -1203,10 +1207,10 @@ func handleDeploy(noUpdate bool) error {
 
 	if !noUpdate {
 		fmt.Println("► Updating homelab-daemon flake input...")
-		updateCmd := exec.Command("nix", "flake", "update", "homelab-daemon", "--flake", flakeDir)
-		updateCmd.Stdout = os.Stdout
-		updateCmd.Stderr = os.Stderr
-		if err := updateCmd.Run(); err != nil {
+		flakeUpdateCmd := exec.Command("nix", "flake", "update", "homelab-daemon", "--flake", flakeDir)
+		flakeUpdateCmd.Stdout = os.Stdout
+		flakeUpdateCmd.Stderr = os.Stderr
+		if err := flakeUpdateCmd.Run(); err != nil {
 			return fmt.Errorf("nix flake update failed: %w", err)
 		}
 	}
