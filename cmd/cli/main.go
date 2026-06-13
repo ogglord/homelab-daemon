@@ -889,6 +889,9 @@ func handleVMAction(name, action string) error {
 		return fmt.Errorf("contacting daemon: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("daemon returned status %d", resp.StatusCode)
+	}
 	var result struct {
 		Success bool   `json:"success"`
 		Error   string `json:"error,omitempty"`
