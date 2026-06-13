@@ -826,7 +826,10 @@ func sendTestEmail(cfg doctor.NotifyConfig) error {
 		cfg.From, cfg.To, subject, body,
 	)
 	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
-	auth := smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPassword, cfg.SMTPHost)
+	var auth smtp.Auth
+	if cfg.SMTPUser != "" {
+		auth = smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPassword, cfg.SMTPHost)
+	}
 	if err := smtp.SendMail(addr, auth, cfg.From, strings.Split(cfg.To, ","), []byte(msg)); err != nil {
 		return fmt.Errorf("send failed: %w", err)
 	}
