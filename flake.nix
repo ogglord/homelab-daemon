@@ -22,10 +22,25 @@
 
         vendorHash = "sha256-P2iJMVxM40Pi9aDg0ZWGp/0D7Cqu3NscDTt7R1AgX0Q=";
 
+        # Filter out build artifacts so changing result/dist doesn't invalidate Go derivations.
+        goSrc = pkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter =
+            path: type:
+            let
+              rel = pkgs.lib.removePrefix (toString ./. + "/") path;
+            in
+            !(pkgs.lib.hasPrefix "result" rel)
+            && !(pkgs.lib.hasPrefix "frontend/dist" rel)
+            && !(pkgs.lib.hasPrefix "frontend/node_modules" rel)
+            && !(pkgs.lib.hasPrefix "docs" rel)
+            && !(pkgs.lib.hasPrefix ".git" rel);
+        };
+
         daemon = pkgs.buildGoModule {
           pname = "homelab-daemon";
           version = "0.2.0";
-          src = ./.;
+          src = goSrc;
           inherit vendorHash;
           postPatch = ''
             rm -rf vendor
@@ -46,7 +61,7 @@
         cli = pkgs.buildGoModule {
           pname = "homelab";
           version = "0.2.0";
-          src = ./.;
+          src = goSrc;
           inherit vendorHash;
           postPatch = ''
             rm -rf vendor
