@@ -55,6 +55,7 @@ func main() {
 			configCmd(),
 			daemonCmd(),
 			doctorCmd(),
+			storageCmd(),
 			vmCmd(),
 			deployCmd(),
 			completionCmd(),
@@ -777,6 +778,95 @@ func handleDoctorNotify() error {
 	}
 	fmt.Printf("Notification sent: %d check(s) failed\n", report.Failed)
 	return nil
+}
+
+// ── storage ──────────────────────────────────────────────────────────────────
+
+func storageCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "storage",
+		Usage: "Show bcachefs pool status",
+		Subcommands: []*cli.Command{
+			{
+				Name:  "status",
+				Usage: "Show status of all storage pools",
+				Action: func(c *cli.Context) error {
+					handleStorageStatus(jsonFlag(c))
+					return nil
+				},
+			},
+		},
+	}
+}
+
+func handleStorageStatus(asJSON bool) {
+	resp, err := httpClient.Get("http://unix/api/storage")
+	if err != nil {
+		die("contacting daemon: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		die("daemon returned status %d", resp.StatusCode)
+	}
+	var payload struct {
+		Pools []struct {
+			UUID     string `json:"uuid"`
+			Name     string `json:"name"`
+			State    string `json:"state"`
+			Mountdir string `json:"mountdir"`
+			Usage    *struct {
+				TotalBytes  uint64  `json:"total_bytes"`
+				UsedBytes   uint64  `json:"used_bytes"`
+				UsedPercent float64 `json:"used_percent"`
+			} `json:"usage"`
+		} `json:"pools"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		die("decoding response: %v", err)
+	}
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(payload)
+		return
+	}
+	if len(payload.Pools) == 0 {
+		fmt.Println("No storage pools found.")
+		return
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAME\tMOUNT\tSTATE\tUSED\tTOTAL\tUSED%")
+	for _, p := range payload.Pools {
+		name := p.Name
+		if name == "" {
+			if len(p.UUID) >= 8 {
+				name = "pool-" + p.UUID[:8]
+			} else {
+				name = p.UUID
+			}
+		}
+		used, total, pct := "-", "-", "-"
+		if p.Usage != nil {
+			used = fmtStorageBytes(p.Usage.UsedBytes)
+			total = fmtStorageBytes(p.Usage.TotalBytes)
+			pct = fmt.Sprintf("%.1f%%", p.Usage.UsedPercent)
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", name, p.Mountdir, p.State, used, total, pct)
+	}
+	w.Flush()
+}
+
+func fmtStorageBytes(b uint64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := uint64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
 // ── vm ───────────────────────────────────────────────────────────────────────
