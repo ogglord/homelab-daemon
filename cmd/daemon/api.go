@@ -269,6 +269,12 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 		}
 		writeJSON(w, out)
 	}
+	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+
 	mux.HandleFunc("GET /api/status", statusHandler)
 
 	mux.HandleFunc("POST /api/start/{unit}", func(w http.ResponseWriter, r *http.Request) {
