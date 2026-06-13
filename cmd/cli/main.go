@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -854,6 +855,8 @@ func handleUpdateStatus(asJSON bool) {
 			noUpdate = append(noUpdate, e)
 		}
 	}
+	sort.Slice(withUpdate, func(i, j int) bool { return withUpdate[i].name < withUpdate[j].name })
+	sort.Slice(noUpdate, func(i, j int) bool { return noUpdate[i].name < noUpdate[j].name })
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintln(w, "CONTAINER\tCURRENT\tNEWEST\tAVAILABLE")
 	for _, e := range withUpdate {
