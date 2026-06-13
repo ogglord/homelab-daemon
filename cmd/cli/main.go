@@ -55,6 +55,7 @@ func main() {
 			configCmd(),
 			daemonCmd(),
 			doctorCmd(),
+			deployCmd(),
 			completionCmd(),
 			mergeConfigCmd(),
 		},
@@ -775,6 +776,75 @@ func handleDoctorNotify() error {
 	}
 	fmt.Printf("Notification sent: %d check(s) failed\n", report.Failed)
 	return nil
+}
+
+// ── deploy ───────────────────────────────────────────────────────────────────
+
+func deployCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "deploy",
+		Usage: "Update homelab-daemon flake input and switch NixOS configuration",
+		Subcommands: []*cli.Command{
+			{
+				Name:  "switch",
+				Usage: "Update homelab-daemon flake input and run nh os switch",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "no-update",
+						Usage: "Skip nix flake update, just run nh os switch",
+					},
+				},
+				Action: func(c *cli.Context) error {
+					return handleDeploy(c.Bool("no-update"))
+				},
+			},
+			{
+				Name:  "rollback",
+				Usage: "Roll back to the previous NixOS generation",
+				Action: func(c *cli.Context) error {
+					return handleRollback()
+				},
+			},
+		},
+		// Default action with no subcommand = switch
+		Action: func(c *cli.Context) error {
+			return handleDeploy(false)
+		},
+	}
+}
+
+func handleDeploy(noUpdate bool) error {
+	flakeDir := os.Getenv("NH_FLAKE")
+	if flakeDir == "" {
+		flakeDir = os.Getenv("NH_OS_FLAKE")
+	}
+	if flakeDir == "" {
+		return fmt.Errorf("NH_FLAKE is not set — set it to your nixos flake directory")
+	}
+
+	if !noUpdate {
+		fmt.Println("► Updating homelab-daemon flake input...")
+		updateCmd := exec.Command("nix", "flake", "update", "homelab-daemon", "--flake", flakeDir)
+		updateCmd.Stdout = os.Stdout
+		updateCmd.Stderr = os.Stderr
+		if err := updateCmd.Run(); err != nil {
+			return fmt.Errorf("nix flake update failed: %w", err)
+		}
+	}
+
+	fmt.Println("► Running nh os switch...")
+	switchCmd := exec.Command("nh", "os", "switch")
+	switchCmd.Stdout = os.Stdout
+	switchCmd.Stderr = os.Stderr
+	return switchCmd.Run()
+}
+
+func handleRollback() error {
+	fmt.Println("► Running nh os rollback...")
+	cmd := exec.Command("nh", "os", "rollback")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // ── completion ───────────────────────────────────────────────────────────────
