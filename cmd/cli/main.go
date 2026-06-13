@@ -40,7 +40,8 @@ func main() {
 	app := &cli.App{
 		Name:    "homelab",
 		Usage:   "Manage your homelab services, backups, secrets, and health",
-		Version: fmt.Sprintf("%s (built %s)", Version, BuildDate),
+		Version:              fmt.Sprintf("%s (built %s)", Version, BuildDate),
+		EnableBashCompletion: true,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "json",
@@ -54,6 +55,7 @@ func main() {
 			configCmd(),
 			daemonCmd(),
 			doctorCmd(),
+			completionCmd(),
 			mergeConfigCmd(),
 		},
 		Action: func(c *cli.Context) error {
@@ -773,6 +775,48 @@ func handleDoctorNotify() error {
 	}
 	fmt.Printf("Notification sent: %d check(s) failed\n", report.Failed)
 	return nil
+}
+
+// ── completion ───────────────────────────────────────────────────────────────
+
+func completionCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "completion",
+		Usage: "Generate shell completion script",
+		Subcommands: []*cli.Command{
+			{
+				Name:  "bash",
+				Usage: "Generate bash completion script",
+				Action: func(c *cli.Context) error {
+					fmt.Println(`# Add to ~/.bashrc:
+# eval "$(homelab completion bash)"
+_homelab_completion() {
+    local cur prev words cword
+    _init_completion || return
+    COMPREPLY=($(COMP_LINE="${COMP_LINE}" COMP_POINT="${COMP_POINT}" homelab --generate-bash-completion))
+    return 0
+}
+complete -F _homelab_completion homelab`)
+					return nil
+				},
+			},
+			{
+				Name:  "zsh",
+				Usage: "Generate zsh completion script",
+				Action: func(c *cli.Context) error {
+					fmt.Println(`# Add to ~/.zshrc:
+# eval "$(homelab completion zsh)"
+_homelab() {
+    local -a completions
+    completions=($(COMP_LINE="${COMP_LINE}" COMP_POINT="${COMP_POINT}" homelab --generate-bash-completion))
+    compadd -a completions
+}
+compdef _homelab homelab`)
+					return nil
+				},
+			},
+		},
+	}
 }
 
 // ── merge-config ─────────────────────────────────────────────────────────────
