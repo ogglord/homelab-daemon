@@ -267,6 +267,11 @@
   --chart-5: oklch(0.70 0.20 25);
 }
 
+/* ── Fallback service icon: invert in dark so SVG stroke reads white ── */
+.dark img[data-fallback="true"] {
+  filter: invert(1);
+}
+
 /* ── Dark dot-grid texture — on html so it's present before React mounts ── */
 .dark,
 .dark body {

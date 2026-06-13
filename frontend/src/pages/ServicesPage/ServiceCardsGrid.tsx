@@ -67,7 +67,11 @@ export function ServiceCardsGrid({
                         alt={item.name}
                         className={`size-7 object-contain rounded ${!isActive ? "grayscale opacity-60" : ""}`}
                         loading="lazy"
-                        onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_ICON; }}
+                        data-fallback={!item.icon_url ? "true" : undefined}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = FALLBACK_ICON;
+                          (e.target as HTMLImageElement).dataset.fallback = "true";
+                        }}
                       />
                     </MenuTrigger>
                   </TooltipTrigger>

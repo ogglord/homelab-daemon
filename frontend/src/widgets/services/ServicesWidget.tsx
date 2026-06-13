@@ -79,7 +79,11 @@ export function ServicesWidget() {
                       alt={s.name}
                       className="size-10 object-contain"
                       loading="lazy"
-                      onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_ICON; }}
+                      data-fallback={!s.icon_url ? "true" : undefined}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = FALLBACK_ICON;
+                        (e.target as HTMLImageElement).dataset.fallback = "true";
+                      }}
                     />
                     <StatusDotSVG color={dotColor} />
                   </div>

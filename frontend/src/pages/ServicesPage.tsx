@@ -402,7 +402,11 @@ export default function ServicesPage() {
                       alt={item.name}
                       className={`size-8 object-contain rounded ${item.state !== "active" ? "grayscale opacity-50" : ""}`}
                       loading="lazy"
-                      onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_ICON; }}
+                      data-fallback={!item.icon_url ? "true" : undefined}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = FALLBACK_ICON;
+                        (e.target as HTMLImageElement).dataset.fallback = "true";
+                      }}
                     />
                   </MenuTrigger>
                   <MenuContent placement="bottom start" className="min-w-40">
