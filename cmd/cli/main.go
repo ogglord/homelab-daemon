@@ -30,7 +30,7 @@ var httpClient = &http.Client{
 			return net.Dial("unix", socketPath)
 		},
 	},
-	Timeout: 5 * time.Second,
+	Timeout: 60 * time.Second,
 }
 
 var (
