@@ -16,7 +16,7 @@
  * setPollInterval(). The shared poller reads it on every tick.
  */
 import { useState, useEffect, useCallback } from "react";
-import type { Stats, ServiceInfo, VMInfo, BackupStatus, VPNStatus } from "@/types";
+import type { Stats, ServiceInfo, VMInfo, BackupStatus, VPNStatus, QbitStatus } from "@/types";
 
 // ── Exported types matching the Go overview response ────────────────────
 
@@ -27,6 +27,7 @@ export interface OverviewData {
   VMs: VMInfo[];
   Backups: BackupStatus[];
   VPN: VPNStatus;
+  Qbittorrent: QbitStatus;
   ErrMsg?: string;
 }
 

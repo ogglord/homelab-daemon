@@ -117,6 +117,15 @@ func handleMergeConfig() {
 		}
 	}
 
+	// 3b. Sync nix-owned singleton sections. The qui block is derived
+	// entirely from NixOS config (no runtime mutation), so defaults are
+	// authoritative — unlike services/backups which can be edited at runtime.
+	if existingCfg.Qui != defaultCfg.Qui {
+		existingCfg.Qui = defaultCfg.Qui
+		mergeLog.Info("synced qui config from defaults", "enabled", defaultCfg.Qui.Enabled, "url", defaultCfg.Qui.URL)
+		modified = true
+	}
+
 	// 4. Enforce migrations/versioning.
 	if Migrate(existingCfg) {
 		modified = true

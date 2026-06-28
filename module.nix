@@ -103,6 +103,9 @@ let
     + "  veth_netns_ip: ${builtins.toJSON cfg.vpn.vethNetnsIP}\n"
     + "  port_file: ${builtins.toJSON cfg.vpn.portFile}\n"
     + "  refresh_interval_seconds: ${toString cfg.vpn.refreshIntervalSeconds}\n"
+  )
+  + lib.optionalString cfg.qui.enable (
+    "\nqui:\n" + "  enabled: true\n" + "  url: ${builtins.toJSON cfg.qui.url}\n"
   );
 
 in
@@ -270,6 +273,26 @@ in
           };
         };
       };
+    };
+
+    qui = lib.mkOption {
+      type = lib.types.submodule {
+        options = {
+          enable = lib.mkEnableOption "qui integration for the qBittorrent overview widget";
+          url = lib.mkOption {
+            type = lib.types.str;
+            default = "http://127.0.0.1:7476";
+            description = ''
+              Base URL of the local qui instance. The daemon aggregates
+              torrents across all qui-managed qBittorrent instances for the
+              dashboard overview. qui runs with auth disabled for 127.0.0.1,
+              so no credentials are sent.
+            '';
+          };
+        };
+      };
+      default = { };
+      description = "qui integration settings for the qBittorrent dashboard widget.";
     };
 
     managedServices = lib.mkOption {

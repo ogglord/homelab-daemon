@@ -20,8 +20,17 @@ type Config struct {
 	Notify   NotifyConfig  `yaml:"notify"`
 	Storage  StorageConfig `yaml:"storage"`
 	VPN      VPNConfig     `yaml:"vpn"`
+	Qui      QuiConfig     `yaml:"qui"`
 	Services []Service     `yaml:"services"`
 	Backups  []Backup      `yaml:"backups"`
+}
+
+// QuiConfig points the daemon at a local qui instance, used to aggregate
+// qBittorrent torrents for the dashboard overview. qui runs with auth
+// disabled for 127.0.0.1, so no credentials are needed.
+type QuiConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	URL     string `yaml:"url"`
 }
 
 // VPNConfig configures the daemon-owned WireGuard netns. All values are

@@ -114,6 +114,38 @@ export interface LogViewerField {
 }
 
 //////////
+// source: qbittorrent.go
+
+/**
+ * QbitTorrent is a single torrent surfaced on the dashboard Overview,
+ * aggregated across all qui-managed qBittorrent instances. Speeds are in
+ * bytes/sec, Size in bytes, Progress is 0..1, Eta in seconds. Instance is
+ * the qui instance name the torrent belongs to.
+ */
+export interface QbitTorrent {
+  hash: string;
+  name: string;
+  size: number /* int64 */;
+  progress: number /* float64 */;
+  dlspeed: number /* int64 */;
+  upspeed: number /* int64 */;
+  eta: number /* int64 */;
+  state: string;
+  instance: string;
+}
+/**
+ * QbitStatus is the qBittorrent block of the dashboard Overview. Enabled is
+ * false when the qui integration is disabled; Error carries a qui fetch
+ * failure so the widget can show it without blocking the rest of the
+ * overview. Torrents is sorted by download speed, descending (active first).
+ */
+export interface QbitStatus {
+  enabled: boolean;
+  error?: string;
+  torrents: QbitTorrent[];
+}
+
+//////////
 // source: secrets.go
 
 /**

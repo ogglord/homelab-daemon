@@ -1,25 +1,8 @@
-import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Meter, MeterTrack } from "@/components/ui/meter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download } from "lucide-react";
-
-interface QbitTorrent {
-  hash: string;
-  name: string;
-  size: number;
-  progress: number;
-  dlspeed: number;
-  upspeed: number;
-  eta: number;
-  state: string;
-}
-
-interface QbitStats {
-  torrents: QbitTorrent[];
-  enabled: boolean;
-  error?: string;
-}
+import { useOverview } from "@/hooks/use-overview";
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return "0 B";
@@ -30,7 +13,7 @@ function formatBytes(bytes: number) {
 }
 
 export function QbittorrentWidget() {
-  const [stats, setStats] = useState<QbitStats | null>(null);
+  const { data: stats } = useOverview((o) => o?.Qbittorrent);
 
   if (!stats) return <Skeleton isLoading><Card className="h-full"><CardContent>{"."}</CardContent></Card></Skeleton>;
   if (!stats.enabled) return null;
@@ -55,12 +38,15 @@ export function QbittorrentWidget() {
         <div className="flex items-center gap-1.5 mb-2">
           <Download className="h-3.5 w-3.5 text-primary" />
           <span className="text-[10px] tracking-[0.15em] uppercase text-primary/60 font-semibold">Torrents</span>
+          {stats.torrents?.length > 0 && (
+            <span className="ml-auto font-mono text-[10px] text-muted-fg">{stats.torrents.length}</span>
+          )}
         </div>
 
         {stats.torrents?.length === 0 ? (
-          <p className="text-xs text-muted-fg">No active transfers</p>
+          <p className="text-xs text-muted-fg">No torrents</p>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 max-h-64 overflow-y-auto">
             {stats.torrents?.map((t) => {
               const isDownloading = t.dlspeed > 0 || t.state.includes("downloading");
               const color = isDownloading ? "var(--color-primary)" : "var(--color-success)";
@@ -69,9 +55,9 @@ export function QbittorrentWidget() {
               const progressPct = Math.min(t.progress * 100, 100);
 
               return (
-                <div key={t.hash}>
+                <div key={`${t.instance}/${t.hash}`}>
                   <div className="flex justify-between text-xs mb-0.5">
-                    <span className="text-fg truncate pr-2" title={t.name}>{t.name}</span>
+                    <span className="text-fg truncate pr-2" title={`${t.name} — ${t.instance}`}>{t.name}</span>
                     <span className="font-mono text-muted-fg shrink-0">
                       {speedLabel} {formatBytes(speed)}/s
                     </span>

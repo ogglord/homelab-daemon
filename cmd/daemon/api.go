@@ -18,6 +18,7 @@ import (
 	"github.com/ogglord/homelab-daemon/internal/cmdrunner"
 	"github.com/ogglord/homelab-daemon/internal/collector"
 	"github.com/ogglord/homelab-daemon/internal/notifier"
+	"github.com/ogglord/homelab-daemon/internal/qui"
 	"github.com/ogglord/homelab-daemon/internal/storage/bcachefs"
 	"github.com/ogglord/homelab-daemon/internal/updates"
 	"github.com/ogglord/homelab-daemon/internal/vms"
@@ -1371,20 +1372,36 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 			backups = append(backups, bs)
 		}
 
+		// qBittorrent — aggregate torrents across all qui instances. A qui
+		// failure populates Error for the widget but never blocks the rest
+		// of the overview.
+		qbit := api.QbitStatus{Enabled: cfg.Qui.Enabled, Torrents: []api.QbitTorrent{}}
+		if cfg.Qui.Enabled {
+			torrents, qErr := qui.New(cfg.Qui.URL).AllTorrents(r.Context())
+			if qErr != nil {
+				qbit.Error = qErr.Error()
+				apiLog.Warn("overview: failed to fetch qui torrents", "error", qErr)
+			} else {
+				qbit.Torrents = torrents
+			}
+		}
+
 		writeJSON(w, struct {
-			Hostname string             `json:"Hostname"`
-			Stats    api.StatsSnapshot  `json:"Stats"`
-			Services []api.ServiceInfo  `json:"Services"`
-			VMs      []api.VMInfo       `json:"VMs"`
-			Backups  []api.BackupStatus `json:"Backups"`
-			VPN      api.VPNStatus      `json:"VPN"`
+			Hostname    string             `json:"Hostname"`
+			Stats       api.StatsSnapshot  `json:"Stats"`
+			Services    []api.ServiceInfo  `json:"Services"`
+			VMs         []api.VMInfo       `json:"VMs"`
+			Backups     []api.BackupStatus `json:"Backups"`
+			VPN         api.VPNStatus      `json:"VPN"`
+			Qbittorrent api.QbitStatus     `json:"Qbittorrent"`
 		}{
-			Hostname: hostname,
-			Stats:    stats,
-			Services: services,
-			VMs:      vmsList,
-			Backups:  backups,
-			VPN:      api.VPNStatus(vpnMod.Get()),
+			Hostname:    hostname,
+			Stats:       stats,
+			Services:    services,
+			VMs:         vmsList,
+			Backups:     backups,
+			VPN:         api.VPNStatus(vpnMod.Get()),
+			Qbittorrent: qbit,
 		})
 	})
 
