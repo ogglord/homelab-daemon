@@ -620,3 +620,24 @@ export const VMStatePMSuspended = "PM Suspended";
  * Canonical VM-state strings, mirrored on the frontend.
  */
 export const VMStateUnknown = "Unknown";
+
+//////////
+// source: vpn.go
+
+/**
+ * VPNStatus is the daemon's VPN snapshot, surfaced on /api/vpn and the
+ * dashboard Overview. JSON tags must match internal/vpn.Status.
+ */
+export interface VPNStatus {
+  Enabled: boolean;
+  Connected: boolean;
+  Provider: string;
+  Type: string;
+  ServerCountry: string;
+  PublicIP: string;
+  Country: string;
+  ForwardedPort: number /* int */;
+  LastHandshake: string;
+  FailureCount: number /* int */;
+  ErrMsg?: string;
+}

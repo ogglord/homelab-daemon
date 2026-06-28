@@ -20,7 +20,7 @@
           config.allowUnfree = true;
         };
 
-        vendorHash = "sha256-P2iJMVxM40Pi9aDg0ZWGp/0D7Cqu3NscDTt7R1AgX0Q=";
+        vendorHash = "sha256-BifeCp6rYuP6hnaQ/Xu+fBM7wbI6h8j5B8nAcOG7x2s=";
 
         # Filter out build artifacts so changing result/dist doesn't invalidate Go derivations.
         goSrc = pkgs.lib.cleanSourceWith {
