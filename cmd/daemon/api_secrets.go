@@ -26,8 +26,8 @@ import (
 	"time"
 
 	api "github.com/ogglord/homelab-api"
-	logging "github.com/ogglord/homelab-logging"
 	"github.com/ogglord/homelab-daemon/internal/cmdrunner"
+	logging "github.com/ogglord/homelab-logging"
 )
 
 func init() {
@@ -65,13 +65,40 @@ func readSecretKV(e api.SecretEntry, alias string) string {
 const (
 	secretsRegistryPath = "/etc/homelab-secrets-registry.json"
 	sopsBin             = "sops"
-	repoPath            = "/home/ogge/nixos"
-	secretsYamlPath     = repoPath + "/secrets/secrets.yaml"
 	ageKeyFile          = "/var/lib/sops-age/keys.txt"
 	deployPendingPath   = "/run/homelab-daemon/secrets-pending"
 	// timestampStorePath persists per-secret rotation times across deploys.
 	// Lives in StateDirectory so it survives nh os switch (unlike /run).
-	timestampStorePath  = "/var/lib/homelab-daemon/secret-timestamps.json"
+	timestampStorePath = "/var/lib/homelab-daemon/secret-timestamps.json"
+)
+
+// resolveRepoPath returns the flake root directory from NH_FLAKE
+// (e.g. "/home/ogge/repos/nixos" or "/path/to/flake#host"),
+// falling back to "." if the env var is absent.
+var resolveRepoPath = func() string {
+	nhFlake := os.Getenv("NH_FLAKE")
+	if nhFlake == "" {
+		nhFlake = os.Getenv("FLAKE")
+	}
+	if nhFlake == "" {
+		secretsLog.Warn("NH_FLAKE not set; falling back to CWD for sops operations")
+		return "."
+	}
+	// Strip the flake attr suffix: /path/to/flake#host → /path/to/flake
+	if idx := strings.LastIndexByte(nhFlake, '#'); idx >= 0 {
+		nhFlake = nhFlake[:idx]
+	}
+	if nhFlake == "" {
+		return "."
+	}
+	return nhFlake
+}()
+
+var (
+	// secretsYamlPath is the fully-qualified path to secrets.yaml (derived from NH_FLAKE).
+	secretsYamlPath = resolveRepoPath + "/secrets/secrets.yaml"
+	// sopsConfigPath is the sops config file in the flake root.
+	sopsConfigPath = resolveRepoPath + "/.sops.yaml"
 )
 
 // SecretEntry and SecretStatus moved to pkg/api (the shared wire
@@ -168,8 +195,8 @@ func sopsSet(keyPath, value string) error {
 	}
 	jsonPath := fmt.Sprintf(`["%s"]["%s"]`, parts[0], parts[1])
 
-	res, err := cmdrunner.New("secrets", sopsBin, "set", "--value-stdin", secretsYamlPath, jsonPath).
-		WithEnv("SOPS_AGE_KEY_FILE="+ageKeyFile).
+	res, err := cmdrunner.New("secrets", sopsBin, "--config", sopsConfigPath, "set", "--value-stdin", secretsYamlPath, jsonPath).
+		WithEnv("SOPS_AGE_KEY_FILE=" + ageKeyFile).
 		WithStdin(strings.NewReader(fmt.Sprintf("%q", value))).
 		Output(cmdrunner.OutputCombined).
 		Run()
@@ -190,7 +217,7 @@ func gitCommitAndPush(message string) error {
 		// Run git as the 'ogge' user so it uses the correct SSH keys.
 		// Use -C <repo> instead of WithCwd because AsUser uses sudo -i which
 		// would chdir to ogge's home before exec, defeating the cwd.
-		gitArgs := append([]string{"-C", repoPath}, args...)
+		gitArgs := append([]string{"-C", resolveRepoPath}, args...)
 		res, err := cmdrunner.New("secrets", "git", gitArgs...).
 			AsUser("ogge").
 			Output(cmdrunner.OutputCombined).
@@ -324,7 +351,8 @@ func registerSecretsAPI(mux *http.ServeMux) {
 		send("Starting nh os switch...")
 		secretsLog.Info("secrets deploy triggered via dashboard")
 
-		_, err := cmdrunner.New("secrets", "nh", "os", "switch", repoPath).
+		_, err := cmdrunner.New("secrets", "nh", "os", "switch").
+			WithCwd(resolveRepoPath).
 			WithContext(r.Context()).
 			WithLineHandler(func(stream, line string) {
 				if strings.HasPrefix(strings.TrimSpace(line), "{") {
