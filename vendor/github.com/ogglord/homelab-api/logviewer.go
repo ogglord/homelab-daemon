@@ -4,10 +4,10 @@ package api
 // Generated at runtime by the daemon from its managed services list
 // so every service in services.yaml automatically gets a filter tab.
 type LogViewerConfig struct {
-	DefaultMode  string                  `json:"defaultMode"`
-	DefaultWindow string                 `json:"defaultWindow"`
-	MaxLines     int                     `json:"maxLines"`
-	Services     []LogViewerServiceConfig `json:"services"`
+	DefaultMode   string                   `json:"defaultMode"`
+	DefaultWindow string                   `json:"defaultWindow"`
+	MaxLines      int                      `json:"maxLines"`
+	Services      []LogViewerServiceConfig `json:"services"`
 }
 
 type LogViewerServiceConfig struct {

@@ -18,6 +18,7 @@ import (
 	"github.com/ogglord/homelab-daemon/internal/notifier"
 	"github.com/ogglord/homelab-daemon/internal/storage/bcachefs"
 	"github.com/ogglord/homelab-daemon/internal/updates"
+	"github.com/ogglord/homelab-daemon/internal/vpn"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -175,6 +176,26 @@ func main() {
 		collector.WithMounts([]string{"/"}),
 	)
 
+	// VPN subsystem (WireGuard netns + NAT-PMP). Maps parsed config → module.
+	vpnMod := vpn.New(vpn.Config{
+		Enabled:                cfg.VPN.Enabled,
+		NetnsName:              cfg.VPN.NetnsName,
+		Interface:              cfg.VPN.Interface,
+		Address:                cfg.VPN.Address,
+		DNS:                    cfg.VPN.DNS,
+		PeerPublicKey:          cfg.VPN.PeerPublicKey,
+		PeerEndpoint:           cfg.VPN.PeerEndpoint,
+		AllowedIPs:             cfg.VPN.AllowedIPs,
+		PrivateKeyFile:         cfg.VPN.PrivateKeyFile,
+		Provider:               cfg.VPN.Provider,
+		Type:                   cfg.VPN.Type,
+		ServerCountry:          cfg.VPN.ServerCountry,
+		VethHostIP:             cfg.VPN.VethHostIP,
+		VethNetnsIP:            cfg.VPN.VethNetnsIP,
+		PortFile:               cfg.VPN.PortFile,
+		RefreshIntervalSeconds: cfg.VPN.RefreshIntervalSeconds,
+	})
+
 	// All long-running background workers share an errgroup so a fatal
 	// failure in one (or context cancellation from SIGTERM) tears the
 	// daemon down cleanly with proper goroutine shutdown.
@@ -187,6 +208,11 @@ func main() {
 
 	g.Go(func() error {
 		col.Start(gctx, 2*time.Second)
+		return nil
+	})
+
+	g.Go(func() error {
+		vpnMod.Start(gctx)
 		return nil
 	})
 
@@ -206,7 +232,7 @@ func main() {
 	// consumer (homelab-dash, the `homelab` CLI, the module docs).
 	sockPath := "/run/homelab-daemon/daemon.sock"
 	g.Go(func() error {
-		if err := serveAPI(gctx, sockPath, cfg, state, *configPath, breaker, scheduler, updatesMod, col, notify); err != nil {
+		if err := serveAPI(gctx, sockPath, cfg, state, *configPath, breaker, scheduler, updatesMod, col, notify, vpnMod); err != nil {
 			mainLog.Error("API server stopped", "error", err)
 			return err
 		}

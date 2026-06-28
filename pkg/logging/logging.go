@@ -4,10 +4,11 @@
 // forbidden and CI-linted.
 //
 // Field contract:
-//   module: required, low-cardinality, one of the canonical names listed
-//           in logging.md.
-//   kind:   "event" by default; CmdLogger() returns "cmd" for shell
-//           invocations emitted by cmdrunner.
+//
+//	module: required, low-cardinality, one of the canonical names listed
+//	        in logging.md.
+//	kind:   "event" by default; CmdLogger() returns "cmd" for shell
+//	        invocations emitted by cmdrunner.
 package logging
 
 import (
@@ -23,6 +24,7 @@ var canonicalModules = map[string]struct{}{
 	// daemon
 	"bug": {}, "api": {}, "secrets": {}, "monitor": {}, "middleware": {},
 	"storage": {}, "updates": {}, "cmdrunner": {}, "daemon_collector": {},
+	"vpn": {},
 	// dash
 	"dash_server": {}, "dash_daemon": {}, "dash_storage": {}, "dash_bug": {},
 }
@@ -74,7 +76,7 @@ type CtxKey int
 
 const (
 	CtxKeyReqID   CtxKey = iota // string: request id propagated by HTTP middleware
-	CtxKeyPeerUID                // uint32: SO_PEERCRED uid (daemon middleware only)
+	CtxKeyPeerUID               // uint32: SO_PEERCRED uid (daemon middleware only)
 )
 
 // FromContext extracts a logger pre-tagged with the request id, if present.

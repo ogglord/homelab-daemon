@@ -14,13 +14,14 @@ import (
 	"sync"
 	"time"
 
+	api "github.com/ogglord/homelab-api"
 	"github.com/ogglord/homelab-daemon/internal/cmdrunner"
 	"github.com/ogglord/homelab-daemon/internal/collector"
 	"github.com/ogglord/homelab-daemon/internal/notifier"
 	"github.com/ogglord/homelab-daemon/internal/storage/bcachefs"
 	"github.com/ogglord/homelab-daemon/internal/updates"
 	"github.com/ogglord/homelab-daemon/internal/vms"
-	api "github.com/ogglord/homelab-api"
+	"github.com/ogglord/homelab-daemon/internal/vpn"
 )
 
 // ── pi-web sessiond client ───────────────────────────────────────────────
@@ -90,7 +91,7 @@ func computeBlockedReason(svc Service, activeState string, failureCount int, bac
 //	PATCH /api/backups/:unit  — update configuration for one backup
 var apiLog = logging.Logger("api")
 
-func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, cfgPath string, breaker *CircuitBreaker, scheduler *Scheduler, updatesMod *updates.Module, col *collector.Collector, notify *notifier.Notifier) error {
+func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, cfgPath string, breaker *CircuitBreaker, scheduler *Scheduler, updatesMod *updates.Module, col *collector.Collector, notify *notifier.Notifier, vpnMod *vpn.Module) error {
 	// Remove stale socket.
 	_ = os.Remove(sockPath)
 
@@ -639,9 +640,9 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 		deadline time.Time
 	}
 	var (
-		storageCache     *storageCacheEntry
-		storageCacheMu   sync.Mutex
-		storageCacheTTL  = 10 * time.Second
+		storageCache    *storageCacheEntry
+		storageCacheMu  sync.Mutex
+		storageCacheTTL = 10 * time.Second
 	)
 	mux.HandleFunc("GET /api/storage", func(w http.ResponseWriter, r *http.Request) {
 		storageCacheMu.Lock()
@@ -1186,6 +1187,15 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 		writeJSON(w, col.Get())
 	})
 
+	// ── VPN status ───────────────────────────────────────────────────────
+	mux.HandleFunc("GET /api/vpn", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, vpnMod.Get())
+	})
+	mux.HandleFunc("POST /api/vpn/reconnect", func(w http.ResponseWriter, r *http.Request) {
+		vpnMod.Reconnect()
+		writeJSON(w, map[string]string{"status": "reconnect triggered"})
+	})
+
 	// ── Wire-contract version probe ──────────────────────────────────────
 	// Unversioned (/api/version) so clients can ask "which API do you
 	// speak?" before picking a prefix. Same body served at
@@ -1362,17 +1372,19 @@ func serveAPI(ctx context.Context, sockPath string, cfg *Config, state *State, c
 		}
 
 		writeJSON(w, struct {
-			Hostname string              `json:"Hostname"`
-			Stats    api.StatsSnapshot   `json:"Stats"`
-			Services []api.ServiceInfo   `json:"Services"`
-			VMs      []api.VMInfo        `json:"VMs"`
-			Backups  []api.BackupStatus  `json:"Backups"`
+			Hostname string             `json:"Hostname"`
+			Stats    api.StatsSnapshot  `json:"Stats"`
+			Services []api.ServiceInfo  `json:"Services"`
+			VMs      []api.VMInfo       `json:"VMs"`
+			Backups  []api.BackupStatus `json:"Backups"`
+			VPN      api.VPNStatus      `json:"VPN"`
 		}{
 			Hostname: hostname,
 			Stats:    stats,
 			Services: services,
 			VMs:      vmsList,
 			Backups:  backups,
+			VPN:      api.VPNStatus(vpnMod.Get()),
 		})
 	})
 
