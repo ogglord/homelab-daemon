@@ -46,23 +46,23 @@ const (
 )
 
 type Builder struct {
-	callerModule       string
-	name               string
-	args               []string
-	user               string
-	escalation         Escalation
-	cwd                string
-	env                []string
-	ctx                context.Context
-	timeout            time.Duration
-	stdin              io.Reader
-	lineHandler        func(stream, line string)
-	outputMode         OutputMode
-	secretEnvKeys      map[string]struct{}
-	sandbox            bool
-	sandboxAllowRead   []string
-	sandboxAllowWrite  []string
-	sandboxDenyRead    []string
+	callerModule        string
+	name                string
+	args                []string
+	user                string
+	escalation          Escalation
+	cwd                 string
+	env                 []string
+	ctx                 context.Context
+	timeout             time.Duration
+	stdin               io.Reader
+	lineHandler         func(stream, line string)
+	outputMode          OutputMode
+	secretEnvKeys       map[string]struct{}
+	sandbox             bool
+	sandboxAllowRead    []string
+	sandboxAllowWrite   []string
+	sandboxDenyRead     []string
 	sandboxAllowDomains []string
 }
 
@@ -115,10 +115,10 @@ func (e *Error) Unwrap() error {
 // Spawned is a handle to a long-running subprocess started via Builder.Spawn().
 // The caller owns the pipes and must call Wait() to clean up.
 type Spawned struct {
-	Stdin   io.WriteCloser
-	Stdout  io.ReadCloser
-	Stderr  io.ReadCloser
-	Pid     int
+	Stdin  io.WriteCloser
+	Stdout io.ReadCloser
+	Stderr io.ReadCloser
+	Pid    int
 
 	cmd     *exec.Cmd
 	builder *Builder
@@ -128,7 +128,7 @@ type Spawned struct {
 
 var canonicalModules = map[string]struct{}{
 	"bug": {}, "api": {}, "secrets": {}, "monitor": {}, "middleware": {},
-	"storage": {}, "updates": {}, "cmdrunner": {},
+	"storage": {}, "updates": {}, "cmdrunner": {}, "vpn": {},
 }
 
 var cmdrunnerLog = logging.CmdLogger()
@@ -818,8 +818,8 @@ func (b *Builder) writeTempSandboxSettings() (string, error) {
 			"allowLocalBinding":   false,
 		},
 		"filesystem": map[string]any{
-			"denyRead":  filteredDeny,
-			"allowRead": b.sandboxAllowRead,
+			"denyRead":   filteredDeny,
+			"allowRead":  b.sandboxAllowRead,
 			"allowWrite": b.sandboxAllowWrite,
 			"denyWrite":  []string{},
 		},

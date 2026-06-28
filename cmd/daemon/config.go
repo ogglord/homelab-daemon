@@ -19,15 +19,37 @@ type Config struct {
 	Version  int           `yaml:"version"`
 	Notify   NotifyConfig  `yaml:"notify"`
 	Storage  StorageConfig `yaml:"storage"`
+	VPN      VPNConfig     `yaml:"vpn"`
 	Services []Service     `yaml:"services"`
 	Backups  []Backup      `yaml:"backups"`
 }
 
+// VPNConfig configures the daemon-owned WireGuard netns. All values are
+// generic VPN infrastructure — the daemon never references any consumer.
+type VPNConfig struct {
+	Enabled                bool   `yaml:"enabled"`
+	NetnsName              string `yaml:"netns_name"`
+	Interface              string `yaml:"interface"`
+	Address                string `yaml:"address"`
+	DNS                    string `yaml:"dns"`
+	PeerPublicKey          string `yaml:"peer_public_key"`
+	PeerEndpoint           string `yaml:"peer_endpoint"`
+	AllowedIPs             string `yaml:"allowed_ips"`
+	PrivateKeyFile         string `yaml:"private_key_file"`
+	Provider               string `yaml:"provider"`
+	Type                   string `yaml:"type"`
+	ServerCountry          string `yaml:"server_country"`
+	VethHostIP             string `yaml:"veth_host_ip"`
+	VethNetnsIP            string `yaml:"veth_netns_ip"`
+	PortFile               string `yaml:"port_file"`
+	RefreshIntervalSeconds int    `yaml:"refresh_interval_seconds"`
+}
+
 // NotifyConfig holds SMTP alert configuration.
 type NotifyConfig struct {
-	SMTP   SMTPConfig `yaml:"smtp"`
-	From   string     `yaml:"from"`
-	To     string     `yaml:"to"`
+	SMTP SMTPConfig `yaml:"smtp"`
+	From string     `yaml:"from"`
+	To   string     `yaml:"to"`
 }
 
 // SMTPConfig for sending email alerts.
