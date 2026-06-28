@@ -2,6 +2,8 @@ package vpn
 
 import (
 	"context"
+	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -133,9 +135,14 @@ func (m *Module) refreshPort(ctx context.Context) (int, error) {
 }
 
 // checkHandshake returns the latest-handshake epoch via `wg show`.
+// wg is resolved on the host and run inside the netns so it can see wg0.
 func (m *Module) checkHandshake(ctx context.Context) (int64, error) {
+	wgPath, err := exec.LookPath("wg")
+	if err != nil {
+		return 0, fmt.Errorf("wg binary not found: %w", err)
+	}
 	res, err := m.run(ctx, []string{"ip", "netns", "exec", m.cfg.NetnsName,
-		"wg", "show", m.cfg.Interface, "latest-handshakes"})
+		wgPath, "show", m.cfg.Interface, "latest-handshakes"})
 	if err != nil {
 		return 0, err
 	}
