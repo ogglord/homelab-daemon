@@ -11,6 +11,7 @@ import { NetworkWidget } from './system/NetworkWidget';
 import { TopCpuWidget } from './system/TopCpuWidget';
 import { TopMemoryWidget } from './system/TopMemoryWidget';
 import { QbittorrentWidget } from './services/QbittorrentWidget';
+import { VpnWidget } from './system/VpnWidget';
 
 export interface WidgetDefinition {
   id: string;
@@ -102,5 +103,11 @@ export const WIDGETS: WidgetDefinition[] = [
     name: 'qBittorrent Active',
     component: QbittorrentWidget,
     defaultGridSpan: 2,
+  },
+  {
+    id: 'vpn',
+    name: 'VPN Status',
+    component: VpnWidget,
+    defaultGridSpan: 1,
   },
 ];
