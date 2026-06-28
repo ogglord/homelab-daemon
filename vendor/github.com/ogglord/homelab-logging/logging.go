@@ -23,6 +23,7 @@ var canonicalModules = map[string]struct{}{
 	// daemon
 	"bug": {}, "api": {}, "secrets": {}, "monitor": {}, "middleware": {},
 	"storage": {}, "updates": {}, "cmdrunner": {}, "daemon_collector": {},
+	"vpn": {},
 	// dash
 	"dash_server": {}, "dash_daemon": {}, "dash_storage": {}, "dash_bug": {},
 }
