@@ -147,6 +147,12 @@ in
       default = "/cache/appdata/homelab/services.yaml";
     };
 
+    flakePath = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "Absolute path to the NixOS flake root. Used by the daemon to locate secrets.yaml and .sops.yaml for sops operations. Set this in your host configuration, e.g. /home/ogge/repos/nixos.";
+    };
+
     stateDir = lib.mkOption {
       type = lib.types.str;
       default = "/var/lib/homelab-daemon";
@@ -501,6 +507,10 @@ in
               libnatpmp
               curl
             ];
+            environment = lib.mkIf (cfg.flakePath != "") {
+              NH_FLAKE = cfg.flakePath;
+              SOPS_CONFIG = "${cfg.flakePath}/.sops.yaml";
+            };
             serviceConfig = {
               ExecStart =
                 "${pkg}/bin/homelab-daemon" + " --config ${cfg.configFile}" + " --state-dir ${cfg.stateDir}";

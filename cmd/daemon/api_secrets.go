@@ -195,8 +195,8 @@ func sopsSet(keyPath, value string) error {
 	}
 	jsonPath := fmt.Sprintf(`["%s"]["%s"]`, parts[0], parts[1])
 
-	res, err := cmdrunner.New("secrets", sopsBin, "--config", sopsConfigPath, "set", "--value-stdin", secretsYamlPath, jsonPath).
-		WithEnv("SOPS_AGE_KEY_FILE=" + ageKeyFile).
+	res, err := cmdrunner.New("secrets", sopsBin, "set", "--value-stdin", secretsYamlPath, jsonPath).
+		WithEnv("SOPS_AGE_KEY_FILE="+ageKeyFile, "SOPS_CONFIG="+sopsConfigPath).
 		WithStdin(strings.NewReader(fmt.Sprintf("%q", value))).
 		Output(cmdrunner.OutputCombined).
 		Run()
