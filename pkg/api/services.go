@@ -70,28 +70,28 @@ type PatchServiceResponse struct {
 // and config fields. It is the single source of truth for the frontend's
 // service table, emitted by the daemon's merged services endpoint.
 type ServiceInfo struct {
-	Name            string   `json:"name"`
-	Type            string   `json:"type"` // "Docker" or "Native"
-	Image           string   `json:"image,omitempty"`
-	ActiveState     string   `json:"active_state"`
-	SubState        string   `json:"sub_state"`
-	Description     string   `json:"description"`
-	UnitName        string   `json:"unit_name"`
-	UpdateAvailable bool     `json:"update_available"`
-	CurrentVersion  string   `json:"current_version,omitempty"`
-	RemoteVersion   string   `json:"remote_version,omitempty"`
-	DaemonManaged   bool     `json:"daemon_managed"`
-	RestartPolicy   string   `json:"restart_policy"`
-	BootOrder       int      `json:"boot_order"`
-	BootDelay       int      `json:"boot_delay"`
-	RestartDelay    int      `json:"restart_delay"`
-	DependsOn       []string `json:"depends_on"`
-	UserStopped     bool     `json:"user_stopped"`
-	DaemonEnabled   bool     `json:"daemon_enabled"`
-	FailureCount    int      `json:"failure_count"`
-	BackoffSeconds  int      `json:"backoff_seconds"`
-	BlockedReason   string   `json:"blocked_reason"`  // why the daemon won't start/restart this service
-	RequiresMounts  []string `json:"requires_mount"`  // mountpoints that must be present
+	Name            string        `json:"name"`
+	Type            string        `json:"type"` // "Docker" or "Native"
+	Image           string        `json:"image,omitempty"`
+	ActiveState     string        `json:"active_state"`
+	SubState        string        `json:"sub_state"`
+	Description     string        `json:"description"`
+	UnitName        string        `json:"unit_name"`
+	UpdateAvailable bool          `json:"update_available"`
+	CurrentVersion  string        `json:"current_version,omitempty"`
+	RemoteVersion   string        `json:"remote_version,omitempty"`
+	DaemonManaged   bool          `json:"daemon_managed"`
+	RestartPolicy   string        `json:"restart_policy"`
+	BootOrder       int           `json:"boot_order"`
+	BootDelay       int           `json:"boot_delay"`
+	RestartDelay    int           `json:"restart_delay"`
+	DependsOn       []string      `json:"depends_on"`
+	UserStopped     bool          `json:"user_stopped"`
+	DaemonEnabled   bool          `json:"daemon_enabled"`
+	FailureCount    int           `json:"failure_count"`
+	BackoffSeconds  int           `json:"backoff_seconds"`
+	BlockedReason   string        `json:"blocked_reason"` // why the daemon won't start/restart this service
+	RequiresMounts  []string      `json:"requires_mount"` // mountpoints that must be present
 	IconURL         string        `json:"icon_url,omitempty"`
 	HomepageURL     string        `json:"homepage_url,omitempty"`
 	StartedAt       string        `json:"started_at,omitempty"`    // RFC3339; empty when inactive
