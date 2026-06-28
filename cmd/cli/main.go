@@ -1206,8 +1206,11 @@ func handleDeploy(noUpdate bool) error {
 	}
 
 	if !noUpdate {
-		fmt.Println("► Updating homelab-daemon flake input...")
-		flakeUpdateCmd := exec.Command("nix", "flake", "update", "homelab-daemon", "--flake", flakeDir)
+		inputs := autoUpdateInputs(flakeDir)
+		fmt.Printf("► Updating flake inputs: %s\n", strings.Join(inputs, " "))
+		args := append([]string{"flake", "update"}, inputs...)
+		args = append(args, "--flake", flakeDir)
+		flakeUpdateCmd := exec.Command("nix", args...)
 		flakeUpdateCmd.Stdout = os.Stdout
 		flakeUpdateCmd.Stderr = os.Stderr
 		if err := flakeUpdateCmd.Run(); err != nil {
@@ -1228,6 +1231,22 @@ func handleRollback() error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// autoUpdateInputs reads the flake's `autoUpdateInputs` output — the list of
+// inputs `homelab deploy` refreshes. Falls back to homelab-daemon if the
+// output is missing or the eval fails.
+func autoUpdateInputs(flakeDir string) []string {
+	fallback := []string{"homelab-daemon"}
+	out, err := exec.Command("nix", "eval", "--json", flakeDir+"#autoUpdateInputs").Output()
+	if err != nil {
+		return fallback
+	}
+	var inputs []string
+	if err := json.Unmarshal(out, &inputs); err != nil || len(inputs) == 0 {
+		return fallback
+	}
+	return inputs
 }
 
 // ── completion ───────────────────────────────────────────────────────────────
