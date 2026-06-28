@@ -84,6 +84,25 @@ let
     + "    password: ${lib.escapeNixString cfg.notify.smtp.password}\n"
     + "  from: ${lib.escapeNixString cfg.notify.from}\n"
     + "  to: ${lib.escapeNixString cfg.notify.to}\n"
+  )
+  + lib.optionalString cfg.vpn.enable (
+    "\nvpn:\n"
+    + "  enabled: true\n"
+    + "  netns_name: ${lib.escapeNixString cfg.vpn.netnsName}\n"
+    + "  interface: ${lib.escapeNixString cfg.vpn.interface}\n"
+    + "  address: ${lib.escapeNixString cfg.vpn.address}\n"
+    + "  dns: ${lib.escapeNixString cfg.vpn.dns}\n"
+    + "  peer_public_key: ${lib.escapeNixString cfg.vpn.peerPublicKey}\n"
+    + "  peer_endpoint: ${lib.escapeNixString cfg.vpn.peerEndpoint}\n"
+    + "  allowed_ips: ${lib.escapeNixString cfg.vpn.allowedIPs}\n"
+    + "  private_key_file: ${lib.escapeNixString cfg.vpn.privateKeyFile}\n"
+    + "  provider: ${lib.escapeNixString cfg.vpn.provider}\n"
+    + "  type: ${lib.escapeNixString cfg.vpn.type}\n"
+    + "  server_country: ${lib.escapeNixString cfg.vpn.serverCountry}\n"
+    + "  veth_host_ip: ${lib.escapeNixString cfg.vpn.vethHostIP}\n"
+    + "  veth_netns_ip: ${lib.escapeNixString cfg.vpn.vethNetnsIP}\n"
+    + "  port_file: ${lib.escapeNixString cfg.vpn.portFile}\n"
+    + "  refresh_interval_seconds: ${toString cfg.vpn.refreshIntervalSeconds}\n"
   );
 
 in
@@ -175,6 +194,76 @@ in
         SMTP notification settings. When configured, the daemon sends email
         alerts for failed backup jobs, service failures, and daemon crashes.
       '';
+    };
+
+    vpn = lib.mkOption {
+      description = "Daemon-owned WireGuard netns (generic VPN infra; no consumer knowledge).";
+      default = { };
+      type = lib.types.submodule {
+        options = {
+          enable = lib.mkEnableOption "daemon-managed WireGuard VPN netns";
+          netnsName = lib.mkOption {
+            type = lib.types.str;
+            default = "vpn";
+          };
+          interface = lib.mkOption {
+            type = lib.types.str;
+            default = "wg0";
+          };
+          address = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+          };
+          dns = lib.mkOption {
+            type = lib.types.str;
+            default = "10.2.0.1";
+          };
+          peerPublicKey = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+          };
+          peerEndpoint = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+          };
+          allowedIPs = lib.mkOption {
+            type = lib.types.str;
+            default = "0.0.0.0/0";
+          };
+          privateKeyFile = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+          };
+          provider = lib.mkOption {
+            type = lib.types.str;
+            default = "protonvpn";
+          };
+          type = lib.mkOption {
+            type = lib.types.str;
+            default = "wireguard";
+          };
+          serverCountry = lib.mkOption {
+            type = lib.types.str;
+            default = "Switzerland";
+          };
+          vethHostIP = lib.mkOption {
+            type = lib.types.str;
+            default = "10.200.0.1/30";
+          };
+          vethNetnsIP = lib.mkOption {
+            type = lib.types.str;
+            default = "10.200.0.2/30";
+          };
+          portFile = lib.mkOption {
+            type = lib.types.str;
+            default = "/run/homelab-daemon/vpn/forwarded-port";
+          };
+          refreshIntervalSeconds = lib.mkOption {
+            type = lib.types.int;
+            default = 45;
+          };
+        };
+      };
     };
 
     managedServices = lib.mkOption {
@@ -406,6 +495,11 @@ in
               nh
               pi-coding-agent
               sandbox-runtime
+              # VPN subsystem: WireGuard netns bring-up + NAT-PMP port forwarding.
+              wireguard-tools
+              iproute2
+              libnatpmp
+              curl
             ];
             serviceConfig = {
               ExecStart =
